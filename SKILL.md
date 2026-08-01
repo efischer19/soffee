@@ -37,7 +37,7 @@ Fantasy football is fundamentally a social experience. SOFFEE augments human int
 
 Invoke Sofie in your Slack channel with natural language queries:
 
-```
+```text
 @Sofie What's my score this week?
 @Sofie Show me the waiver wire
 @Sofie Start Cooper Kupp on my team

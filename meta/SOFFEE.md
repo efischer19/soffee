@@ -1,6 +1,6 @@
 # **Executive Summary: Project SOFFEE**
 
-**Eric’s ESPN Fantasy Football Openclaw Skill, acronymed backwards for a better name**
+Eric's ESPN Fantasy Football Openclaw Skill, acronymed backwards for a better name
 
 ## **1\. Project Overview & Persona**
 

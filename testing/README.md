@@ -1,7 +1,7 @@
-# {{PROJECT_NAME}} — Testing
+# soffee — Testing
 
 This directory contains shared testing utilities and fixtures for
-**{{PROJECT_NAME}}**.
+**soffee**.
 
 ## Purpose
 

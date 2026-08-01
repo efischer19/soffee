@@ -1,31 +1,39 @@
-# python-project-blueprint
+# soffee
 
-> A template for Python monorepo projects targeting Python 3.12+ with uv
-> dependency management.
+> **S**офие **O**penClaw **F**antasy **F**ootball **E**ngineer — **E**ric's ESPN
+> skill, acronymed backwards for a better name.
 
 ## What Is This?
 
-This is a **GitHub template repository** for bootstrapping Python monorepo
-projects. It provides the directory structure, tooling decisions, and
-configuration needed for a well-organized Python project using modern tools
-and best practices.
+**Project SOFFEE** is an open-source initiative to build a native,
+conversational AI assistant for fantasy football leagues. Deployed as an
+[OpenClaw](https://openclaw.dev) skill, the agent assumes the persona of
+**"Sofie"** — an autonomous, Slack-native commissioner's assistant.
 
-Built on the [blueprint-repo-blueprints](https://github.com/efischer19/blueprint-repo-blueprints)
-foundation, this template adds Python-specific structure, tooling ADRs, and
-development conventions.
+Sofie bridges the gap between disparate fantasy sports platforms and the modern
+chat environments where leagues actually communicate, serving as a data
+retrieval engine, roster manager, and automated content generator.
 
-## How to Use This Template
+For the full executive summary and phased roadmap, see
+[`meta/SOFFEE.md`](./meta/SOFFEE.md).
 
-1. Click the **"Use this template"** button at the top of the repository
-   page on GitHub.
-2. Choose a name for your new repository.
-3. Clone your new repository and begin adding your applications and
-   libraries.
+## Core Philosophy
 
-For more details on GitHub template repositories, see the
-[official documentation](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-template-repository).
+At its heart, fantasy football serves as a vital social engine for maintaining
+lifelong friendships. SOFFEE is engineered to **augment human interaction rather
+than automate it away.** Sofie's automated briefings, performance recaps, and
+persona are specifically tuned to ignite league banter, cultivate competitive
+rivalries, and prompt frequent manager engagement.
 
-## What's Included
+## Phased Roadmap
+
+| Phase | Focus | Architecture |
+| :--- | :--- | :--- |
+| **v0** | Slack MVP | Monolithic OpenClaw skill (ESPN hardcoded) |
+| **v1** | Architecture Refactor | `soffee-core` (PyPI) + `soffee-skill` (ClawHub) |
+| **v2+** | Multi-Platform | Universal Interface + provider adapters |
+
+## Repository Structure
 
 | Path | Purpose |
 | :--- | :--- |
@@ -39,7 +47,7 @@ For more details on GitHub template repositories, see the
 | `docs-src/` | Source files for generated documentation (MkDocs) |
 | `.github/` | GitHub-specific configuration (issue templates, PR templates, CI workflows) |
 
-### Key Tooling Decisions (ADRs)
+## Key Tooling Decisions (ADRs)
 
 | ADR | Decision |
 | :--- | :--- |
@@ -52,34 +60,10 @@ For more details on GitHub template repositories, see the
 
 See `meta/adr/` for the full list of Architecture Decision Records.
 
-### Key Files
-
-* **`LICENSE.md`** — MIT License
-* **`CODE_OF_CONDUCT.md`** — Contributor Covenant Code of Conduct
-* **`SECURITY.md`** — Security policy and vulnerability reporting
-* **`CONTRIBUTING.md`** — Guidelines for contributing to the project
-* **`.python-version`** — Python version specification (3.12)
-
 ## Getting Started
 
-After creating a new repository from this template:
-
-### 1. Replace Template Placeholders
-
-Search the repository for the following placeholders and replace them with
-values appropriate for your project:
-
-| Placeholder | Description | Example |
-| :--- | :--- | :--- |
-| `{{PROJECT_NAME}}` | Your repository / project name | `my-python-project` |
-| `{{GITHUB_OWNER}}` | GitHub username or organization | `my-org` |
-| `{{APP_NAME}}` | Application directory name (in `apps/`) | `api-service` |
-| `{{LIB_NAME}}` | Library directory name (in `libs/`) | `core-utils` |
-
-### 2. Set Up Local Development
-
 ```bash
-# Install Python 3.12+ (use pyenv or your preferred method)
+# Install Python 3.12+
 pyenv install 3.12
 pyenv local 3.12
 
@@ -92,37 +76,7 @@ pre-commit install
 
 # Run local quality checks
 ./scripts/local-ci-check.sh
-
-# Build documentation (optional)
-pip install -r docs-requirements.txt
-./scripts/build-docs.sh
 ```
-
-### 3. Create Your First Application
-
-```bash
-mkdir -p apps/my-app
-cd apps/my-app
-uv init
-mkdir -p src/my_app tests
-```
-
-### 4. Verify CI
-
-Push a change or open a pull request to confirm the CI workflow runs and
-passes in your new repository.
-
-## Design Principles
-
-* **Python 3.12+ only.** Take advantage of modern Python features and
-  performance improvements.
-* **uv everywhere.** Fast, reliable dependency management across all apps
-  and libraries.
-* **Ruff for speed.** Fast linting and formatting that replaces multiple
-  tools.
-* **Documentation-first.** Every significant decision is captured in an ADR.
-* **AI-friendly.** The structure and conventions are designed to work well
-  with AI-assisted development workflows.
 
 ## License
 

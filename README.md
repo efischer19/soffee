@@ -1,7 +1,7 @@
 # soffee
 
-> **S**офие **O**penClaw **F**antasy **F**ootball **E**ngineer — **E**ric's ESPN
-> skill, acronymed backwards for a better name.
+> **E**ric's **E**SPN **F**antasy **F**ootball **O**penclaw **S**kill, acronymed
+> backwards for a better name.
 
 ## What Is This?
 

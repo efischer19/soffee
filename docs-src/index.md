@@ -1,22 +1,24 @@
-# {{PROJECT_NAME}} Documentation
+# soffee Documentation
 
-Welcome to the official documentation for **{{PROJECT_NAME}}**.
+Welcome to the official documentation for **soffee** — Sofie, the OpenClaw
+Fantasy Football Assistant.
 
 ## Overview
 
-{{PROJECT_NAME}} is built on top of the
-[blueprint-repo-blueprints](https://github.com/efischer19/blueprint-repo-blueprints)
-template, which provides a language-agnostic foundation for documentation,
-architecture decision records, and developer tooling.
+Project SOFFEE is an open-source initiative to build a native, conversational
+AI assistant for fantasy football leagues. Deployed as an OpenClaw skill, the
+agent assumes the persona of **"Sofie"** — an autonomous, Slack-native
+commissioner's assistant.
 
 ## Getting Started
 
-> Replace this section with project-specific setup instructions.
+See the [Contributing Guidelines](CONTRIBUTING.md) for setup instructions and
+the development workflow.
 
 ## Project Structure
 
 ```text
-{{PROJECT_NAME}}/
+soffee/
 ├── meta/           # Development philosophy, ADRs, and plans
 ├── docs-src/       # Documentation source files (MkDocs)
 ├── scripts/        # Utility and automation scripts
@@ -41,7 +43,7 @@ For information on contributing to this project, see the
 ## Getting Help
 
 - Check the documentation pages listed in the navigation
-- Review the [Architecture Decision Records](https://github.com/{{GITHUB_OWNER}}/{{PROJECT_NAME}}/tree/main/meta/adr)
+- Review the [Architecture Decision Records](https://github.com/efischer19/soffee/tree/main/meta/adr)
   for context on past decisions
-- [Open an issue](https://github.com/{{GITHUB_OWNER}}/{{PROJECT_NAME}}/issues)
+- [Open an issue](https://github.com/efischer19/soffee/issues)
   if you find a bug or want to suggest a feature

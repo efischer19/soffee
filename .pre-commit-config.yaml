@@ -1,4 +1,4 @@
-# Pre-commit hooks configuration for python-project-blueprint
+# Pre-commit hooks configuration for soffee
 #
 # To use pre-commit hooks:
 # 1. Install pre-commit: pip install pre-commit

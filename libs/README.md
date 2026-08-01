@@ -1,6 +1,6 @@
-# {{PROJECT_NAME}} — Libraries
+# soffee — Libraries
 
-This directory contains shared libraries for **{{PROJECT_NAME}}**.
+This directory contains shared libraries for **soffee**.
 
 ## Structure
 
@@ -9,11 +9,11 @@ Poetry-managed dependencies:
 
 ```text
 libs/
-├── {{LIB_NAME}}/
+├── <lib-name>/
 │   ├── README.md          # Library-specific documentation
 │   ├── pyproject.toml     # Poetry project configuration
 │   ├── src/
-│   │   └── {{LIB_NAME}}/ # Library source code
+│   │   └── <lib-name>/    # Library source code
 │   └── tests/             # Library tests
 └── ...
 ```

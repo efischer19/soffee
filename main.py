@@ -1025,6 +1025,129 @@ def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]
         }
 
 
+def get_top_free_agent_replacements(
+    league: League | None, position: str, week: int, limit: int = 3
+) -> dict[str, Any]:
+    """
+    Retrieve the top available free agents for a position sorted by projection.
+
+    This function queries the ESPN League to find available free agents at a
+    specific position, filters them by projected points for a given week, and
+    returns the top players sorted by their projected fantasy points in
+    descending order.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        position: The position to filter by (e.g., 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST').
+        week: The fantasy week number for which to retrieve projections (1-17 for
+              regular season). Used to filter stats by scoringPeriodId.
+        limit: Maximum number of free agents to return (default: 3).
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - position (str): The position that was queried
+            - week (int): The week for which projections were retrieved
+            - players (list): List of top free agent dictionaries, sorted highest
+                            to lowest by projected_points. Each player dict contains:
+                - name (str): Player's full name
+                - position (str): Player's position
+                - pro_team (str): Player's NFL team abbreviation
+                - projected_points (float): Projected fantasy points for the week
+                - percent_owned (float): Percentage of league that owns the player
+            - count (int): Number of players returned
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = get_top_free_agent_replacements(league, 'RB', week=5, limit=3)
+        >>> if result['success']:
+        ...     for player in result['players']:
+        ...         print(f"{player['name']}: {player['projected_points']} pts")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot fetch free agents.",
+        }
+
+    if not position or not isinstance(position, str):
+        return {
+            "success": False,
+            "error": "Invalid position: must be a non-empty string.",
+        }
+
+    if not isinstance(week, int) or week < 1:
+        return {
+            "success": False,
+            "error": "Invalid week: must be a positive integer.",
+        }
+
+    if not isinstance(limit, int) or limit < 1:
+        return {
+            "success": False,
+            "error": "Invalid limit: must be a positive integer.",
+        }
+
+    try:
+        # Fetch free agents for the specified position
+        free_agents = league.free_agents(position=position, week=week, size=100)
+
+        # Build list of players with projected points
+        players_with_projections = []
+        for player in free_agents:
+            # Access projected points for the specific week
+            week_stats = player.stats.get(week, {})
+            projected_points = week_stats.get("projected_points", 0)
+
+            player_data = {
+                "name": player.name,
+                "position": player.position,
+                "pro_team": player.proTeam or "",
+                "projected_points": projected_points,
+                "percent_owned": player.percent_owned or 0,
+            }
+            players_with_projections.append(player_data)
+
+        # Sort by projected_points descending
+        sorted_players = sorted(
+            players_with_projections,
+            key=lambda p: p["projected_points"],
+            reverse=True,
+        )
+
+        # Return top N players
+        top_players = sorted_players[:limit]
+
+        return {
+            "success": True,
+            "position": position,
+            "week": week,
+            "players": top_players,
+            "count": len(top_players),
+        }
+
+    except AttributeError as e:
+        return {
+            "success": False,
+            "error": f"Invalid league data structure: {e}",
+        }
+    except (ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "error": f"API connection error: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error fetching free agents: {e}",
+        }
+
+
 def main():
     """
     Main entry point for the SOFFEE OpenClaw skill.

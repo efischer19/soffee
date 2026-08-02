@@ -15,6 +15,7 @@ from main import (
     generate_batch_score_summary,
     get_current_matchups,
     get_team_roster,
+    get_top_free_agent_replacements,
     initialize_league,
     process_waiver_transaction,
     set_lineup_status,
@@ -2277,3 +2278,339 @@ class TestDetectRosterViolations:
         assert result["success"] is True
         # Empty slot player should be ignored
         assert result["violations"] == {}
+
+
+class TestGetTopFreeAgentReplacements:
+    """Test suite for get_top_free_agent_replacements function."""
+
+    def test_get_top_free_agent_replacements_with_none_league(self):
+        """Verify that function returns error when league is None."""
+        result = get_top_free_agent_replacements(None, "QB", week=5)
+
+        assert result["success"] is False
+        assert "League is None" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_position_empty(self):
+        """Verify that function handles empty position string."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "", week=5)
+
+        assert result["success"] is False
+        assert "Invalid position" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_position_type(self):
+        """Verify that function handles non-string position."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, 123, week=5)
+
+        assert result["success"] is False
+        assert "Invalid position" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_week_negative(self):
+        """Verify that function handles negative week number."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=-1)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_week_zero(self):
+        """Verify that function handles week zero."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=0)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_week_type(self):
+        """Verify that function handles non-integer week."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week="5")
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_limit_negative(self):
+        """Verify that function handles negative limit."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5, limit=-1)
+
+        assert result["success"] is False
+        assert "Invalid limit" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_limit_zero(self):
+        """Verify that function handles limit of zero."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5, limit=0)
+
+        assert result["success"] is False
+        assert "Invalid limit" in result["error"]
+
+    def test_get_top_free_agent_replacements_invalid_limit_type(self):
+        """Verify that function handles non-integer limit."""
+        mock_league = MagicMock()
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5, limit="3")
+
+        assert result["success"] is False
+        assert "Invalid limit" in result["error"]
+
+    def test_get_top_free_agent_replacements_no_free_agents(self):
+        """Verify that function handles when no free agents are available."""
+        mock_league = MagicMock()
+        mock_league.free_agents.return_value = []
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is True
+        assert result["position"] == "QB"
+        assert result["week"] == 5
+        assert result["players"] == []
+        assert result["count"] == 0
+
+    def test_get_top_free_agent_replacements_single_player(self):
+        """Verify that function returns single player when one free agent exists."""
+        mock_league = MagicMock()
+
+        # Create mock player
+        mock_player = MagicMock()
+        mock_player.name = "Patrick Mahomes"
+        mock_player.position = "QB"
+        mock_player.proTeam = "KC"
+        mock_player.percent_owned = 80.5
+        mock_player.stats = {5: {"projected_points": 28.5}}
+
+        mock_league.free_agents.return_value = [mock_player]
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is True
+        assert result["position"] == "QB"
+        assert result["week"] == 5
+        assert len(result["players"]) == 1
+        assert result["count"] == 1
+        assert result["players"][0]["name"] == "Patrick Mahomes"
+        assert result["players"][0]["position"] == "QB"
+        assert result["players"][0]["pro_team"] == "KC"
+        assert result["players"][0]["projected_points"] == 28.5
+        assert result["players"][0]["percent_owned"] == 80.5
+
+    def test_get_top_free_agent_replacements_multiple_players_sorted(self):
+        """Verify that function returns top players sorted by projected points."""
+        mock_league = MagicMock()
+
+        # Create mock players with different projections
+        player1 = MagicMock()
+        player1.name = "Josh Allen"
+        player1.position = "QB"
+        player1.proTeam = "BUF"
+        player1.percent_owned = 75.0
+        player1.stats = {5: {"projected_points": 25.0}}
+
+        player2 = MagicMock()
+        player2.name = "Patrick Mahomes"
+        player2.position = "QB"
+        player2.proTeam = "KC"
+        player2.percent_owned = 90.0
+        player2.stats = {5: {"projected_points": 28.5}}
+
+        player3 = MagicMock()
+        player3.name = "Jared Goff"
+        player3.position = "QB"
+        player3.proTeam = "DET"
+        player3.percent_owned = 60.0
+        player3.stats = {5: {"projected_points": 22.0}}
+
+        mock_league.free_agents.return_value = [player1, player2, player3]
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5, limit=3)
+
+        assert result["success"] is True
+        assert result["count"] == 3
+        # Should be sorted highest to lowest
+        assert result["players"][0]["name"] == "Patrick Mahomes"
+        assert result["players"][0]["projected_points"] == 28.5
+        assert result["players"][1]["name"] == "Josh Allen"
+        assert result["players"][1]["projected_points"] == 25.0
+        assert result["players"][2]["name"] == "Jared Goff"
+        assert result["players"][2]["projected_points"] == 22.0
+
+    def test_get_top_free_agent_replacements_respects_limit(self):
+        """Verify that function respects the limit parameter."""
+        mock_league = MagicMock()
+
+        # Create 5 mock players
+        players = []
+        for i in range(5):
+            player = MagicMock()
+            player.name = f"Player {i + 1}"
+            player.position = "RB"
+            player.proTeam = "TB"
+            player.percent_owned = 50.0
+            player.stats = {5: {"projected_points": float(30 - i)}}
+            players.append(player)
+
+        mock_league.free_agents.return_value = players
+
+        result = get_top_free_agent_replacements(mock_league, "RB", week=5, limit=2)
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert len(result["players"]) == 2
+
+    def test_get_top_free_agent_replacements_default_limit(self):
+        """Verify that function uses default limit of 3."""
+        mock_league = MagicMock()
+
+        # Create 5 mock players
+        players = []
+        for i in range(5):
+            player = MagicMock()
+            player.name = f"Player {i + 1}"
+            player.position = "WR"
+            player.proTeam = "LAC"
+            player.percent_owned = 40.0
+            player.stats = {5: {"projected_points": float(25 - i)}}
+            players.append(player)
+
+        mock_league.free_agents.return_value = players
+
+        # Call without limit parameter
+        result = get_top_free_agent_replacements(mock_league, "WR", week=5)
+
+        assert result["success"] is True
+        assert result["count"] == 3
+        assert len(result["players"]) == 3
+
+    def test_get_top_free_agent_replacements_handles_missing_stats(self):
+        """Verify that function handles players with missing stats for week."""
+        mock_league = MagicMock()
+
+        # Create player with stats for a different week
+        player = MagicMock()
+        player.name = "Travis Kelce"
+        player.position = "TE"
+        player.proTeam = "KC"
+        player.percent_owned = 70.0
+        player.stats = {4: {"projected_points": 20.0}}  # Only has week 4 stats
+
+        mock_league.free_agents.return_value = [player]
+
+        result = get_top_free_agent_replacements(mock_league, "TE", week=5)
+
+        assert result["success"] is True
+        # Should return the player with projected_points = 0 (from missing stats)
+        assert result["count"] == 1
+        assert result["players"][0]["projected_points"] == 0
+
+    def test_get_top_free_agent_replacements_handles_none_values(self):
+        """Verify that function handles players with None for optional fields."""
+        mock_league = MagicMock()
+
+        player = MagicMock()
+        player.name = "Unknown Player"
+        player.position = "K"
+        player.proTeam = None  # Can be None
+        player.percent_owned = None  # Can be None
+        player.stats = {5: {"projected_points": 15.0}}
+
+        mock_league.free_agents.return_value = [player]
+
+        result = get_top_free_agent_replacements(mock_league, "K", week=5)
+
+        assert result["success"] is True
+        assert result["count"] == 1
+        assert result["players"][0]["pro_team"] == ""
+        assert result["players"][0]["percent_owned"] == 0
+
+    def test_get_top_free_agent_replacements_different_positions(self):
+        """Verify that function correctly filters by position."""
+        mock_league = MagicMock()
+
+        player1 = MagicMock()
+        player1.name = "Player 1"
+        player1.position = "RB"
+        player1.proTeam = "TB"
+        player1.percent_owned = 50.0
+        player1.stats = {5: {"projected_points": 20.0}}
+
+        mock_league.free_agents.return_value = [player1]
+
+        result = get_top_free_agent_replacements(mock_league, "RB", week=5)
+
+        assert result["success"] is True
+        # Verify the correct method was called with the right parameters
+        mock_league.free_agents.assert_called_once_with(position="RB", week=5, size=100)
+
+    def test_get_top_free_agent_replacements_connection_error(self):
+        """Verify that function handles connection errors gracefully."""
+        mock_league = MagicMock()
+        mock_league.free_agents.side_effect = ConnectionError(
+            "Network connection failed"
+        )
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is False
+        assert "API connection error" in result["error"]
+
+    def test_get_top_free_agent_replacements_timeout_error(self):
+        """Verify that function handles timeout errors gracefully."""
+        mock_league = MagicMock()
+        mock_league.free_agents.side_effect = TimeoutError("Request timed out")
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is False
+        assert "API connection error" in result["error"]
+
+    def test_get_top_free_agent_replacements_attribute_error(self):
+        """Verify that function handles attribute errors gracefully."""
+        mock_league = MagicMock()
+        mock_league.free_agents.side_effect = AttributeError("Invalid player structure")
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is False
+        assert "Invalid league data structure" in result["error"]
+
+    def test_get_top_free_agent_replacements_generic_exception(self):
+        """Verify that function handles unexpected exceptions gracefully."""
+        mock_league = MagicMock()
+        mock_league.free_agents.side_effect = Exception("Unexpected error")
+
+        result = get_top_free_agent_replacements(mock_league, "QB", week=5)
+
+        assert result["success"] is False
+        assert "Unexpected error fetching free agents" in result["error"]
+
+    def test_get_top_free_agent_replacements_multiple_weeks(self):
+        """Verify that function correctly fetches for different weeks."""
+        mock_league = MagicMock()
+
+        player = MagicMock()
+        player.name = "Test Player"
+        player.position = "QB"
+        player.proTeam = "KC"
+        player.percent_owned = 50.0
+        player.stats = {
+            5: {"projected_points": 28.5},
+            6: {"projected_points": 25.0},
+        }
+
+        mock_league.free_agents.return_value = [player]
+
+        # Test week 5
+        result_week5 = get_top_free_agent_replacements(mock_league, "QB", week=5)
+        assert result_week5["players"][0]["projected_points"] == 28.5
+
+        # Test week 6
+        result_week6 = get_top_free_agent_replacements(mock_league, "QB", week=6)
+        assert result_week6["players"][0]["projected_points"] == 25.0

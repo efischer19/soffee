@@ -16,6 +16,8 @@ import requests
 from espn_api.football import League
 from espn_api.football.constant import POSITION_MAP
 
+from authorization import verify_team_ownership
+
 
 def initialize_league() -> League | None:
     """
@@ -286,7 +288,11 @@ def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
 
 
 def set_lineup_status(
-    league: League | None, team_id: int, player_name: str, target_slot: str
+    league: League | None,
+    slack_user_id: str,
+    team_id: int,
+    player_name: str,
+    target_slot: str,
 ) -> dict[str, Any]:
     """
     Move a player to a specific lineup slot (starting or bench).
@@ -297,6 +303,8 @@ def set_lineup_status(
 
     Args:
         league: An initialized ESPN League object. If None, returns error response.
+        slack_user_id: The Slack User ID of the requesting user. Used for authorization
+                      validation to ensure the user owns the team being modified.
         team_id: The ID of the team to update.
         player_name: The full name of the player to move. Supports fuzzy matching.
         target_slot: The target slot position (e.g., "QB", "RB", "WR", "BENCH", "IR").
@@ -312,7 +320,9 @@ def set_lineup_status(
 
     Example:
         >>> league = initialize_league()
-        >>> result = set_lineup_status(league, 1, "Patrick Mahomes", "BENCH")
+        >>> result = set_lineup_status(
+        ...     league, "U1234567890", 1, "Patrick Mahomes", "BENCH"
+        ... )
         >>> if result['success']:
         ...     player = result['player_name']
         ...     prev = result['previous_slot']
@@ -323,6 +333,16 @@ def set_lineup_status(
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
+    # Verify authorization: ensure the user owns the team they're trying to modify
+    if not verify_team_ownership(slack_user_id, team_id):
+        return {
+            "success": False,
+            "error": (
+                f"Unauthorized: Slack user {slack_user_id} does not own team"
+                f" {team_id}"
+            ),
+        }
+
     if league is None:
         return {
             "success": False,
@@ -516,6 +536,7 @@ def set_lineup_status(
 
 def process_waiver_transaction(
     league: League | None,
+    slack_user_id: str,
     team_id: int,
     player_to_add: str,
     player_to_drop: str | None,
@@ -530,6 +551,9 @@ def process_waiver_transaction(
 
     Args:
         league: An initialized ESPN League object. If None, returns error response.
+        slack_user_id: The Slack User ID of the requesting user. Used for
+                      authorization validation to ensure the user owns the team
+                      making the transaction.
         team_id: The ID of the team processing the transaction.
         player_to_add: The full name of the player to add. Supports fuzzy matching.
         player_to_drop: The full name of the player to drop, or None for free agent
@@ -550,7 +574,7 @@ def process_waiver_transaction(
     Example:
         >>> league = initialize_league()
         >>> result = process_waiver_transaction(
-        ...     league, 1, "Patrick Mahomes", "Backup QB", 5
+        ...     league, "U1234567890", 1, "Patrick Mahomes", "Backup QB", 5
         ... )
         >>> if result['success']:
         ...     print(f"Added {result['player_added']}")
@@ -559,6 +583,16 @@ def process_waiver_transaction(
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
+    # Verify authorization: ensure the user owns the team they're trying to modify
+    if not verify_team_ownership(slack_user_id, team_id):
+        return {
+            "success": False,
+            "error": (
+                f"Unauthorized: Slack user {slack_user_id} does not own team"
+                f" {team_id}"
+            ),
+        }
+
     if league is None:
         return {
             "success": False,

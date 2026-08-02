@@ -9,6 +9,7 @@ For detailed information about the project, see: meta/SOFFEE.md
 """
 
 import os
+from typing import Any
 
 from espn_api.football import League
 
@@ -67,6 +68,104 @@ def initialize_league() -> League | None:
     except Exception as e:
         print(f"Error: Failed to initialize ESPN League: {e}")
         return None
+
+
+def get_current_matchups(league: League | None) -> dict[str, Any]:
+    """
+    Retrieve the current week's matchups, live box scores, and projected points.
+
+    This function queries the ESPN API using an initialized League object to
+    retrieve the current week's matchups. It formats the raw API response into
+    a clean, LLM-readable dictionary containing team names, current points, and
+    projected points for each matchup.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - week (int): The current week number
+            - matchups (list): List of matchup dictionaries, each containing:
+                - matchup_id (int): Unique matchup identifier
+                - home_team (str): Home team name
+                - away_team (str): Away team name
+                - home_score (float): Home team's current score
+                - away_score (float): Away team's current score
+                - home_projected (float): Home team's projected final score
+                - away_projected (float): Away team's projected final score
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = get_current_matchups(league)
+        >>> if result['success']:
+        ...     for matchup in result['matchups']:
+        ...         print(f"{matchup['home_team']} vs {matchup['away_team']}")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot fetch matchups.",
+        }
+
+    try:
+        # Get current week from league
+        current_week = league.current_week
+        if current_week is None:
+            return {
+                "success": False,
+                "error": "Unable to determine current week from league data.",
+            }
+
+        # Fetch box scores for current week
+        box_scores = league.box_scores(week=current_week)
+        if not box_scores:
+            return {
+                "success": True,
+                "week": current_week,
+                "matchups": [],
+            }
+
+        # Format matchups into LLM-readable format
+        matchups = []
+        for i, box_score in enumerate(box_scores):
+            matchup = {
+                "matchup_id": i,
+                "home_team": box_score.home_team.team_name,
+                "away_team": box_score.away_team.team_name,
+                "home_score": round(box_score.home_score, 2),
+                "away_score": round(box_score.away_score, 2),
+                "home_projected": round(box_score.home_projected, 2),
+                "away_projected": round(box_score.away_projected, 2),
+            }
+            matchups.append(matchup)
+
+        return {
+            "success": True,
+            "week": current_week,
+            "matchups": matchups,
+        }
+
+    except AttributeError as e:
+        return {
+            "success": False,
+            "error": f"Invalid league data structure: {e}",
+        }
+    except (ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "error": f"API connection error: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error fetching matchups: {e}",
+        }
 
 
 def main():

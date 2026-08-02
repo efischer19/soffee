@@ -1430,9 +1430,7 @@ def get_historical_season(year: int) -> dict[str, Any]:
 
     try:
         # Attempt to instantiate League object for the specified year
-        league = League(
-            league_id=int(league_id), year=int(year), espn_s2=s2, swid=swid
-        )
+        league = League(league_id=int(league_id), year=int(year), espn_s2=s2, swid=swid)
 
         # Extract standings data
         standings_data = []

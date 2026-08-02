@@ -15,6 +15,7 @@ from main import (
     detect_roster_violations,
     generate_batch_score_summary,
     get_current_matchups,
+    get_historical_season,
     get_team_roster,
     get_top_free_agent_replacements,
     initialize_league,
@@ -2937,3 +2938,196 @@ class TestFormatRosterSweepMessage:
         )
 
         assert "👍" in message or "react" in message.lower()
+
+
+class TestGetHistoricalSeason:
+    """Test suite for get_historical_season function."""
+
+    def test_get_historical_season_success(self):
+        """Verify that get_historical_season returns historical data successfully."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        mock_team1 = MagicMock()
+        mock_team1.team_name = "Team A"
+        mock_team1.team_id = 1
+        mock_team1.wins = 10
+        mock_team1.losses = 4
+        mock_team1.points_for = 1250.75
+        mock_team1.points_against = 1180.50
+
+        mock_team2 = MagicMock()
+        mock_team2.team_name = "Team B"
+        mock_team2.team_id = 2
+        mock_team2.wins = 9
+        mock_team2.losses = 5
+        mock_team2.points_for = 1200.25
+        mock_team2.points_against = 1150.75
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.league_name = "Test League"
+            mock_instance.standings = [mock_team1, mock_team2]
+            mock_league.return_value = mock_instance
+
+            result = get_historical_season(2024)
+
+            assert result["success"] is True
+            assert result["year"] == 2024
+            assert result["league_name"] == "Test League"
+            assert len(result["standings"]) == 2
+            assert result["standings"][0]["team_name"] == "Team A"
+            assert result["standings"][0]["wins"] == 10
+            assert result["standings"][0]["points_for"] == 1250.75
+            assert result["standings"][1]["team_name"] == "Team B"
+
+    def test_get_historical_season_missing_swid(self):
+        """Verify get_historical_season fails when ESPN_SWID is missing."""
+        env_vars = {
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert result["year"] == 2024
+            assert "Missing ESPN credentials" in result["error"]
+            assert "ESPN_SWID" in result["error"]
+
+    def test_get_historical_season_missing_s2(self):
+        """Verify get_historical_season fails when ESPN_S2 is missing."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert "Missing ESPN credentials" in result["error"]
+            assert "ESPN_S2" in result["error"]
+
+    def test_get_historical_season_missing_league_id(self):
+        """Verify get_historical_season fails when ESPN_LEAGUE_ID is missing."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+        }
+
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert "Missing ESPN credentials" in result["error"]
+            assert "ESPN_LEAGUE_ID" in result["error"]
+
+    def test_get_historical_season_invalid_year_format(self):
+        """Verify get_historical_season handles invalid year format."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_league.side_effect = ValueError("Invalid year")
+
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert result["year"] == 2024
+            assert "Invalid ESPN credentials format" in result["error"]
+
+    def test_get_historical_season_year_not_found(self):
+        """Verify get_historical_season handles missing historical data."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_league.side_effect = KeyError("Year not found")
+
+            result = get_historical_season(1999)
+
+            assert result["success"] is False
+            assert result["year"] == 1999
+            assert "may not exist for this league" in result["error"]
+
+    def test_get_historical_season_connection_error(self):
+        """Verify get_historical_season handles connection errors."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_league.side_effect = ConnectionError("Network error")
+
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert "Failed to connect to ESPN API" in result["error"]
+
+    def test_get_historical_season_generic_exception(self):
+        """Verify get_historical_season handles unexpected exceptions."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_league.side_effect = RuntimeError("Unexpected error")
+
+            result = get_historical_season(2024)
+
+            assert result["success"] is False
+            assert result["year"] == 2024
+            assert "Unexpected error" in result["error"]
+
+    def test_get_historical_season_empty_standings(self):
+        """Verify that get_historical_season handles empty standings gracefully."""
+        env_vars = {
+            "ESPN_SWID": "test_swid",
+            "ESPN_S2": "test_s2",
+            "ESPN_LEAGUE_ID": "12345",
+        }
+
+        with (
+            patch.dict(os.environ, env_vars, clear=False),
+            patch("main.League") as mock_league,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.league_name = "Test League"
+            mock_instance.standings = []
+            mock_league.return_value = mock_instance
+
+            result = get_historical_season(2024)
+
+            assert result["success"] is True
+            assert result["standings"] == []
+

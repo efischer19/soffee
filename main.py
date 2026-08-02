@@ -1366,6 +1366,129 @@ def _format_roster_sweep_message(
     return "\n".join(lines)
 
 
+def get_historical_season(year: int) -> dict[str, Any]:
+    """
+    Retrieve historical season data for a given year.
+
+    This function instantiates a League object for a specified historical year
+    and extracts the final standings with total points for and against. It uses
+    the same ESPN credentials (ESPN_SWID, ESPN_S2, ESPN_LEAGUE_ID) that are
+    configured for the current season.
+
+    Args:
+        year: The season year to retrieve historical data for (e.g., 2024, 2025).
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - year (int): The requested season year
+            - league_name (str): Name of the league
+            - standings (list): List of team standings, each containing:
+                - team_name (str): Name of the team
+                - team_id (int): ESPN team ID
+                - wins (int): Number of wins for the season
+                - losses (int): Number of losses for the season
+                - points_for (float): Total points scored by the team
+                - points_against (float): Total points scored against the team
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> result = get_historical_season(2024)
+        >>> if result['success']:
+        ...     for team in result['standings']:
+        ...         print(f"{team['team_name']}: {team['wins']}-{team['losses']}")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    swid = os.environ.get("ESPN_SWID")
+    s2 = os.environ.get("ESPN_S2")
+    league_id = os.environ.get("ESPN_LEAGUE_ID")
+
+    # Validate that required credentials are present
+    if not all([swid, s2, league_id]):
+        missing = [
+            name
+            for name, val in [
+                ("ESPN_SWID", swid),
+                ("ESPN_S2", s2),
+                ("ESPN_LEAGUE_ID", league_id),
+            ]
+            if not val
+        ]
+        missing_creds = ", ".join(missing)
+        error_msg = (
+            f"Missing ESPN credentials required for historical data retrieval: "
+            f"{missing_creds}"
+        )
+        return {
+            "success": False,
+            "year": year,
+            "error": error_msg,
+        }
+
+    try:
+        # Attempt to instantiate League object for the specified year
+        league = League(
+            league_id=int(league_id), year=int(year), espn_s2=s2, swid=swid
+        )
+
+        # Extract standings data
+        standings_data = []
+        if league.standings:
+            for team in league.standings:
+                standings_data.append(
+                    {
+                        "team_name": team.team_name,
+                        "team_id": team.team_id,
+                        "wins": team.wins,
+                        "losses": team.losses,
+                        "points_for": round(team.points_for, 2),
+                        "points_against": round(team.points_against, 2),
+                    }
+                )
+
+        return {
+            "success": True,
+            "year": year,
+            "league_name": league.league_name,
+            "standings": standings_data,
+        }
+
+    except ValueError as e:
+        return {
+            "success": False,
+            "year": year,
+            "error": f"Invalid ESPN credentials format or year value: {e}",
+        }
+    except KeyError as e:
+        error_msg = (
+            f"The requested year {year} may not exist for this league. "
+            f"Please verify the year is within the league's history: {e}"
+        )
+        return {
+            "success": False,
+            "year": year,
+            "error": error_msg,
+        }
+    except (ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "year": year,
+            "error": f"Failed to connect to ESPN API: {e}",
+        }
+    except Exception as e:
+        error_msg = (
+            f"Unexpected error retrieving historical season data for {year}: {e}"
+        )
+        return {
+            "success": False,
+            "year": year,
+            "error": error_msg,
+        }
+
+
 def main():
     """
     Main entry point for the SOFFEE OpenClaw skill.

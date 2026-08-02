@@ -848,9 +848,7 @@ def test_set_lineup_status_player_fuzzy_match():
         mock_response.status_code = 200
         mock_put.return_value = mock_response
 
-        result = set_lineup_status(
-            mock_league, 1, "patrick mahomes", "BENCH"
-        )
+        result = set_lineup_status(mock_league, 1, "patrick mahomes", "BENCH")
 
         assert result["success"] is True
         assert result["player_name"] == "Patrick Mahomes"
@@ -1001,9 +999,7 @@ def test_set_lineup_status_connection_error():
     with patch("main.requests.put") as mock_put:
         import requests
 
-        mock_put.side_effect = requests.exceptions.ConnectionError(
-            "Connection failed"
-        )
+        mock_put.side_effect = requests.exceptions.ConnectionError("Connection failed")
 
         result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
 

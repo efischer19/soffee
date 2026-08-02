@@ -60,6 +60,41 @@ rivalries, and prompt frequent manager engagement.
 
 See `meta/adr/` for the full list of Architecture Decision Records.
 
+## Slack Workspace Setup
+
+Sofie connects to your Slack workspace using [Slack Socket Mode](https://slack.dev/python-slack-sdk/socket-mode/), a secure, bidirectional connection managed by the OpenClaw framework.
+
+### Required OAuth Scopes
+
+To deploy Sofie, your Slack App must request the following OAuth scopes:
+
+| Scope | Purpose |
+| :--- | :--- |
+| `chat:write` | Post messages to channels and direct messages |
+| `chat:write.public` | Post to public channels |
+| `reactions:read` | Read message reactions |
+| `channels:read` | List and view channel information |
+| `users:read` | Read user profiles and information |
+
+### Event Subscriptions
+
+Enable Event Subscriptions in your Slack App and subscribe to:
+
+- `app_mention` — Listen for mentions of Sofie
+- `message.channels` — Listen to channel messages
+- `message.im` — Listen to direct messages
+
+### Environment Configuration
+
+Once your Slack App is configured, set the following environment variables:
+
+```bash
+SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX    # Socket Mode App Token
+SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX      # Bot User OAuth Token
+```
+
+See `.env.example` for a template. For detailed setup instructions, refer to the [Configuration section in SKILL.md](./SKILL.md#configuration).
+
 ## Getting Started
 
 ```bash

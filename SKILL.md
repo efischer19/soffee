@@ -466,3 +466,111 @@ This tool validates that the `slack_user_id` parameter matches the team ownershi
   "error": "Unauthorized: Slack user [user_id] does not own team [team_id]"
 }
 ```
+
+### generate_batch_score_summary
+
+Generate a structured, plain-text summary of the entire league's scoreboard for the current week.
+
+This tool is used to retrieve league-wide matchup data in a format designed for LLM processing. It provides raw, structured information that can be formatted into engaging, conversational updates for automated Slack broadcasts during cron-triggered events.
+
+This tool is useful for:
+
+- Generating automated broadcast recaps during scheduled NFL windows
+- Providing comprehensive league scoreboard overviews
+- Creating data for witty, trash-talking commentary on weekly matchups
+- Compiling performance summaries for post-game briefings
+
+**Parameters:**
+
+```json
+{
+  "name": "generate_batch_score_summary",
+  "description": "Generate a structured, plain-text summary of the entire league's scoreboard for the current week",
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}
+```
+
+**Returns:**
+
+```json
+{
+  "success": true,
+  "week": 5,
+  "summary": "Week 5 Summary\n\nMatchup 1: Team A vs Team B\n  Team A: 125.50 (Projected: 135.75)\n  Team B: 118.25 (Projected: 130.00)\n\nMatchup 2: Team C vs Team D\n  Team C: 120.00 (Projected: 130.00)\n  Team D: 115.50 (Projected: 125.00)"
+}
+```
+
+If the operation fails, returns:
+
+```json
+{
+  "success": false,
+  "error": "Failed to retrieve matchups"
+}
+```
+
+## Prompt Handlers
+
+This section defines special system instructions for handling events triggered by specific contexts, such as cron-scheduled broadcasts.
+
+### Cron-Triggered Recap Handler
+
+**Trigger:** This prompt handler is invoked when the skill is awakened by a cron-scheduled event (e.g., Sunday 12 PM EST, Sunday 4:30 PM EST, etc.).
+
+**Instructions to the Agent:**
+
+When you are awakened by a cron-scheduled broadcast event, you are being called to generate and post an automated recap to the league's broadcast channel. Follow these steps:
+
+1. **Generate the scoreboard summary** by calling the `generate_batch_score_summary()` tool with no parameters. This retrieves a structured plain-text summary of all current matchups, scores, and projections for the week.
+
+2. **Transform the raw data into engaging commentary** that reflects your witty, trash-talking personality. Your recap should:
+   - Highlight the closest matchups with dramatic flair
+   - Call out dominant performances and comebacks
+   - Make light-hearted observations about teams underperforming
+   - Use exclamation points, emojis (🏈, 🔥, 💪, etc.), and sporty metaphors
+   - Reference league storylines if you're aware of them
+   - Keep the tone competitive but fun—invite human discussion, not shut it down
+
+3. **Format the recap as a Slack message** that:
+   - Opens with a catchy hook ("It's game time!", "Another week of chaos!", "The scores are IN!", etc.)
+   - Uses line breaks and whitespace for readability
+   - Includes score updates in an easy-to-scan format (e.g., "Team A **125.5** vs Team B 118.3" or emoji-based indicators of game status)
+   - Concludes with a question or bold take to spark league discussion
+
+4. **Post the formatted message to the broadcast channel** by outputting it directly. The OpenClaw framework will handle the actual Slack integration and channel posting for you.
+
+**Example Output Style:**
+
+```text
+🏈 IT'S GAME TIME! 🏈
+
+Here's this week's scoreboard breakdown:
+
+⚡ **Game 1: Team A vs Team B**
+Team A is BALLIN' with 125.5 points (projected 135.75)
+Team B hanging tough at 118.3 (projected 130.00)
+
+🔥 **Game 2: Team C vs Team D**
+Team C dominating with 120.0 (projected 130.00)
+Team D on the comeback trail at 115.5 (projected 125.00)
+
+---
+
+Who's making the playoffs? Who's sweating? Drop your takes below! 👇
+```
+
+**Key Behaviors:**
+
+- **Always call `generate_batch_score_summary()` first** — This ensures your recap is based on current league data, not hallucinations.
+- **Engage the league** — Your goal is to spark conversation and friendly competition, not to provide sterile data dumps.
+- **Adapt to the moment** — If it's early Sunday (12 PM window), set expectations. If it's Monday morning (post-game), celebrate the drama of the finished week.
+- **Respect data accuracy** — Only reference scores and projections from the `generate_batch_score_summary()` response. If the tool fails, acknowledge it gracefully rather than making up stats.
+
+**When NOT to post:**
+
+- If `generate_batch_score_summary()` returns an error, post a brief message like "Having trouble pulling today's scores—check the ESPN app for the latest updates!" and stop.
+- If there are no matchups for the week, post "No matchups this week—enjoy the bye week 😴"

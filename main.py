@@ -9,6 +9,7 @@ For detailed information about the project, see: meta/SOFFEE.md
 """
 
 import os
+from difflib import get_close_matches
 from typing import Any
 
 from espn_api.football import League
@@ -165,6 +166,120 @@ def get_current_matchups(league: League | None) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"Unexpected error fetching matchups: {e}",
+        }
+
+
+def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
+    """
+    Retrieve a team's active roster with player positions and injury statuses.
+
+    This function queries the ESPN League object to find a team by name and
+    retrieves its roster. It supports fuzzy matching to handle team names that
+    don't exactly match the ESPN database. For each player on the roster, it
+    returns their name, position, and current injury status.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        team_name: The name of the team to retrieve the roster for. Supports
+                   partial name matching and case-insensitive search.
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - team_name (str): The matched team name from the league
+            - roster (list): List of player dictionaries, each containing:
+                - name (str): Player's full name
+                - position (str): Player's position (e.g., "QB", "RB", "WR")
+                - injury_status (str): Injury status or empty string if active
+                  (e.g., "Out", "Day to Day", "Questionable", "")
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = get_team_roster(league, "Kansas City")
+        >>> if result['success']:
+        ...     for player in result['roster']:
+        ...         print(f"{player['name']} ({player['position']})")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot fetch team roster.",
+        }
+
+    if not team_name or not isinstance(team_name, str):
+        return {
+            "success": False,
+            "error": "Invalid team_name: must be a non-empty string.",
+        }
+
+    try:
+        # Get all team names from the league
+        available_teams = [team.team_name for team in league.teams]
+
+        # Try exact match first (case-insensitive)
+        team_obj = None
+        for team in league.teams:
+            if team.team_name.lower() == team_name.lower():
+                team_obj = team
+                break
+
+        # If no exact match, use fuzzy matching
+        if team_obj is None:
+            matches = get_close_matches(team_name, available_teams, n=1, cutoff=0.6)
+            if matches:
+                matched_name = matches[0]
+                for team in league.teams:
+                    if team.team_name == matched_name:
+                        team_obj = team
+                        break
+            else:
+                teams_list = ", ".join(available_teams)
+                error_msg = (
+                    f"Team '{team_name}' not found. Available teams: {teams_list}"
+                )
+                return {
+                    "success": False,
+                    "error": error_msg,
+                }
+
+        # Build roster data
+        roster = []
+        for player in team_obj.roster:
+            player_data = {
+                "name": player.name,
+                "position": player.position,
+                "injury_status": player.injuryStatus or "",
+            }
+            roster.append(player_data)
+
+        # Sort roster by position for consistency
+        roster_sorted = sorted(roster, key=lambda p: (p["position"], p["name"]))
+
+        return {
+            "success": True,
+            "team_name": team_obj.team_name,
+            "roster": roster_sorted,
+        }
+
+    except AttributeError as e:
+        return {
+            "success": False,
+            "error": f"Invalid league data structure: {e}",
+        }
+    except (ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "error": f"API connection error: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error fetching team roster: {e}",
         }
 
 

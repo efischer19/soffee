@@ -1148,6 +1148,228 @@ def get_top_free_agent_replacements(
         }
 
 
+def run_sunday_roster_sweep(league: League | None, week: int) -> dict[str, Any]:
+    """
+    Execute the Sunday morning automated roster violation sweep.
+
+    This function detects starting roster violations (bye weeks and injuries),
+    retrieves top free agent replacements for violating positions, and posts
+    Slack messages to each affected manager with helpful suggestions and
+    light-hearted banter about their roster management.
+
+    The function implements the core workflow for the automated Sunday morning
+    roster sweep cron job. It follows the principle of augmenting human
+    interaction rather than replacing it—providing proactive suggestions while
+    keeping managers engaged and entertained.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        week: The fantasy week number to check (1-17 for regular season).
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - week (int): The week that was checked
+            - violations_found (int): Number of teams with violations
+            - messages_posted (int): Number of Slack messages posted
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = run_sunday_roster_sweep(league, week=5)
+        >>> if result['success']:
+        ...     print(f"Found violations for {result['violations_found']} teams")
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot run roster sweep.",
+        }
+
+    if not isinstance(week, int) or week < 1 or week > 17:
+        return {
+            "success": False,
+            "error": "Invalid week: must be an integer between 1 and 17.",
+        }
+
+    try:
+        from authorization import get_slack_user_for_team
+
+        # Step 1: Detect all roster violations
+        violations_result = detect_roster_violations(league, week)
+
+        if not violations_result.get("success"):
+            return violations_result
+
+        violations = violations_result.get("violations", {})
+
+        if not violations:
+            return {
+                "success": True,
+                "week": week,
+                "violations_found": 0,
+                "messages_posted": 0,
+            }
+
+        messages_posted = 0
+
+        # Step 2: Process each team with violations
+        for team_id, players in violations.items():
+            # Get the Slack user for this team
+            slack_user_id = get_slack_user_for_team(team_id)
+
+            # Skip if we can't find a Slack user for this team
+            if not slack_user_id:
+                continue
+
+            # Get team name for context
+            team = None
+            for t in league.teams:
+                if t.team_id == team_id:
+                    team = t
+                    break
+
+            team_name = team.team_name if team else f"Team {team_id}"
+
+            # Collect unique positions from violations
+            positions_with_violations = {}
+            for player in players:
+                position = player["position"]
+                if position not in positions_with_violations:
+                    positions_with_violations[position] = []
+                positions_with_violations[position].append(player)
+
+            # Step 3: Get free agent replacements for each violating position
+            replacement_suggestions = {}
+            for position, _violating_players in positions_with_violations.items():
+                replacements_result = get_top_free_agent_replacements(
+                    league, position, week, limit=3
+                )
+
+                if replacements_result.get("success"):
+                    replacement_suggestions[position] = replacements_result.get(
+                        "players", []
+                    )
+
+            # Step 4: Format and post Slack message
+            message = _format_roster_sweep_message(
+                slack_user_id, team_name, players, replacement_suggestions
+            )
+
+            if message:
+                # Post to Slack using the OpenClaw framework
+                try:
+                    slack_bot_token = os.environ.get("SLACK_BOT_TOKEN")
+                    if not slack_bot_token:
+                        print(f"Warning: SLACK_BOT_TOKEN not set for team {team_id}")
+                        continue
+
+                    response = requests.post(
+                        "https://slack.com/api/chat.postMessage",
+                        headers={
+                            "Authorization": "******",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "channel": slack_user_id,  # Direct message to the user
+                            "text": message,
+                        },
+                    )
+
+                    if response.status_code == 200:
+                        messages_posted += 1
+                except Exception as e:
+                    # Log the error but continue processing other teams
+                    print(f"Failed to post Slack message for team {team_id}: {e}")
+
+        return {
+            "success": True,
+            "week": week,
+            "violations_found": len(violations),
+            "messages_posted": messages_posted,
+        }
+
+    except (AttributeError, ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "error": f"Error during roster sweep: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error during roster sweep: {e}",
+        }
+
+
+def _format_roster_sweep_message(
+    slack_user_id: str, team_name: str, violations: list, suggestions: dict
+) -> str:
+    """
+    Format a roster violation message for Slack posting.
+
+    Constructs an engaging message that highlights roster violations while
+    providing helpful suggestions for free agent replacements. The message
+    includes light banter about the manager's roster management per the
+    project's engagement philosophy.
+
+    Args:
+        slack_user_id: The Slack User ID to tag in the message.
+        team_name: The name of the team with violations.
+        violations: List of player violation dicts from detect_roster_violations().
+        suggestions: Dictionary mapping positions to lists of suggested free agents.
+
+    Returns:
+        str: A formatted Slack message ready for posting.
+    """
+    lines = []
+
+    # Header with tag and light banter
+    lines.append(f"<@{slack_user_id}> 🚨 Your roster needs some love!")
+    lines.append(
+        f"_Team: {team_name}_ — We found some rough decisions you made this week:"
+    )
+    lines.append("")
+
+    # List violations by position
+    for violation in violations:
+        name = violation.get("name", "Unknown Player")
+        position = violation.get("position", "?")
+        reason = violation.get("violation_reason", "unknown reason")
+
+        reason_text = (
+            "bye week"
+            if reason.lower() == "bye"
+            else f"{reason.lower()} status"
+        )
+        lines.append(f"❌ **{name}** ({position}) — {reason_text}")
+
+    lines.append("")
+
+    # Suggest replacements
+    lines.append("_Here are some free agent pickups to save you:_")
+
+    if suggestions:
+        for position, players in suggestions.items():
+            if players:
+                lines.append(f"\n**{position} Options:**")
+                for i, player in enumerate(players[:3], 1):
+                    name = player.get("name", "Unknown")
+                    proj_pts = player.get("projected_points", 0)
+                    pro_team = player.get("pro_team", "?")
+                    lines.append(
+                        f"{i}. {name} ({pro_team}) — {proj_pts:.1f} pts projected"
+                    )
+    else:
+        lines.append("_No free agent suggestions available for these positions._")
+
+    lines.append("")
+    lines.append(
+        "💬 React with 👍 to confirm, or reply with your preferred picks!"
+    )
+
+    return "\n".join(lines)
+
+
 def main():
     """
     Main entry point for the SOFFEE OpenClaw skill.

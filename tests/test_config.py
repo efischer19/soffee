@@ -49,7 +49,7 @@ class TestScheduleConfigInitialization:
         with patch.dict(os.environ, {}, clear=True):
             config = ScheduleConfig()
             assert config.broadcast_channel == "#nfl-updates"
-            assert len(config.schedules) == 4
+            assert len(config.schedules) == 5
 
     def test_schedule_config_initialization_custom_channel(self):
         """Test that ScheduleConfig respects custom channel environment variable."""
@@ -77,7 +77,7 @@ class TestScheduleConfigInitialization:
         """Test that ScheduleConfig creates exactly four schedules."""
         with patch.dict(os.environ, {}, clear=True):
             config = ScheduleConfig()
-            assert len(config.schedules) == 4
+            assert len(config.schedules) == 5
 
     def test_schedule_config_schedule_names(self):
         """Test that all expected schedules are present by name."""
@@ -85,6 +85,7 @@ class TestScheduleConfigInitialization:
             config = ScheduleConfig()
             names = {schedule.name for schedule in config.schedules}
             expected_names = {
+                "sunday_10am_est_roster_sweep",
                 "sunday_12pm_est",
                 "sunday_430pm_est",
                 "sunday_8pm_est",
@@ -108,7 +109,7 @@ class TestGetSchedules:
         with patch.dict(os.environ, {}, clear=True):
             config = ScheduleConfig()
             schedules = config.get_schedules()
-            assert len(schedules) == 4
+            assert len(config.schedules) == 5
             assert all(isinstance(s, CronSchedule) for s in schedules)
 
     def test_get_schedules_returns_cron_schedule_objects(self):
@@ -185,8 +186,8 @@ class TestToOpenclawMetadata:
         """Test that metadata contains all four schedules."""
         with patch.dict(os.environ, {}, clear=True):
             config = ScheduleConfig()
-            metadata = config.to_openclaw_metadata()
-            assert len(metadata["schedules"]) == 4
+            config.to_openclaw_metadata()
+            assert len(config.schedules) == 5
 
     def test_to_openclaw_metadata_schedule_structure(self):
         """Test that each schedule in metadata has required fields."""

@@ -42,3 +42,32 @@ def verify_team_ownership(slack_user_id: str, target_team_id: int) -> bool:
 
     user_team_id = SLACK_USER_TO_TEAM_MAPPING.get(slack_user_id)
     return user_team_id == target_team_id
+
+
+def get_slack_user_for_team(team_id: int) -> str | None:
+    """Get the Slack User ID for an ESPN team.
+
+    Performs a reverse lookup to find which Slack user owns a specific ESPN team.
+    This is useful for automatically tagging the correct manager in messages.
+
+    Args:
+        team_id: The ESPN Team ID to look up.
+
+    Returns:
+        str: The Slack User ID if found, None otherwise.
+
+    Example:
+        >>> get_slack_user_for_team(1)
+        "U1234567890"
+        >>> get_slack_user_for_team(999)
+        None
+    """
+    if not isinstance(team_id, int) or team_id <= 0:
+        return None
+
+    for slack_user_id, mapped_team_id in SLACK_USER_TO_TEAM_MAPPING.items():
+        if mapped_team_id == team_id:
+            return slack_user_id
+
+    return None
+

@@ -26,11 +26,13 @@ class ScheduleConfig:
     This class loads cron schedules and broadcast channel from environment variables,
     allowing them to be easily customized without code changes. All schedules are
     designed to align with standard NFL broadcast windows (Sunday afternoon/evening
-    and Monday/Tuesday morning).
+    and Monday/Tuesday morning), as well as proactive roster management checks.
 
     Environment Variables:
         SOFFEE_BROADCAST_CHANNEL: Slack channel for automated broadcasts
             (default: #nfl-updates)
+        SOFFEE_CRON_SUNDAY_10AM: Cron pattern for Sunday 10 AM EST roster sweep
+            (default: "0 15 * * 0")
         SOFFEE_CRON_SUNDAY_12PM: Cron pattern for Sunday 12 PM EST
             (default: "0 12 * * 0")
         SOFFEE_CRON_SUNDAY_430PM: Cron pattern for Sunday 4:30 PM EST
@@ -42,6 +44,7 @@ class ScheduleConfig:
     """
 
     # Default cron patterns (in UTC, accounting for EST = UTC-5)
+    DEFAULT_CRON_SUNDAY_10AM = "0 15 * * 0"  # Sunday 10 AM EST roster sweep
     DEFAULT_CRON_SUNDAY_12PM = "0 17 * * 0"  # Sunday 12 PM EST = 17:00 UTC
     DEFAULT_CRON_SUNDAY_430PM = "30 21 * * 0"  # Sunday 4:30 PM EST = 21:30 UTC
     DEFAULT_CRON_SUNDAY_8PM = "0 1 * * 1"  # Sunday 8 PM EST = 1:00 AM Monday UTC
@@ -56,6 +59,14 @@ class ScheduleConfig:
         )
 
         self.schedules = [
+            CronSchedule(
+                name="sunday_10am_est_roster_sweep",
+                description="Sunday 10 AM EST - Automated roster violation sweep",
+                cron_pattern=os.environ.get(
+                    "SOFFEE_CRON_SUNDAY_10AM", self.DEFAULT_CRON_SUNDAY_10AM
+                ),
+                time_window="Sunday 10 AM EST",
+            ),
             CronSchedule(
                 name="sunday_12pm_est",
                 description="Sunday 12 PM EST - Early Sunday window",

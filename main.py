@@ -12,7 +12,9 @@ import os
 from difflib import get_close_matches
 from typing import Any
 
+import requests
 from espn_api.football import League
+from espn_api.football.constant import POSITION_MAP
 
 
 def initialize_league() -> League | None:
@@ -280,6 +282,235 @@ def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
         return {
             "success": False,
             "error": f"Unexpected error fetching team roster: {e}",
+        }
+
+
+def set_lineup_status(
+    league: League | None, team_id: int, player_name: str, target_slot: str
+) -> dict[str, Any]:
+    """
+    Move a player to a specific lineup slot (starting or bench).
+
+    This function updates a player's position in the fantasy football lineup by
+    calling ESPN's write API endpoint. It supports moving players between starting
+    positions and the bench.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        team_id: The ID of the team to update.
+        player_name: The full name of the player to move. Supports fuzzy matching.
+        target_slot: The target slot position (e.g., "QB", "RB", "WR", "BENCH", "IR").
+                     Position names should be uppercase.
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - player_name (str): The player that was moved (if successful)
+            - previous_slot (str): The player's previous slot position
+            - new_slot (str): The player's new slot position
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = set_lineup_status(league, 1, "Patrick Mahomes", "BENCH")
+        >>> if result['success']:
+        ...     player = result['player_name']
+        ...     prev = result['previous_slot']
+        ...     new = result['new_slot']
+        ...     print(f"Moved {player} from {prev} to {new}")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot update lineup.",
+        }
+
+    if not player_name or not isinstance(player_name, str):
+        return {
+            "success": False,
+            "error": "Invalid player_name: must be a non-empty string.",
+        }
+
+    if not target_slot or not isinstance(target_slot, str):
+        return {
+            "success": False,
+            "error": "Invalid target_slot: must be a non-empty string.",
+        }
+
+    try:
+        # Get the team
+        team = None
+        for t in league.teams:
+            if t.team_id == team_id:
+                team = t
+                break
+
+        if team is None:
+            return {
+                "success": False,
+                "error": f"Team with ID {team_id} not found in league.",
+            }
+
+        # Find the player in the team's roster
+        target_player = None
+        available_players = [p.name for p in team.roster]
+
+        # Try exact match first (case-insensitive)
+        for player in team.roster:
+            if player.name.lower() == player_name.lower():
+                target_player = player
+                break
+
+        # If no exact match, use fuzzy matching
+        if target_player is None:
+            matches = get_close_matches(player_name, available_players, n=1, cutoff=0.6)
+            if matches:
+                matched_name = matches[0]
+                for player in team.roster:
+                    if player.name == matched_name:
+                        target_player = player
+                        break
+            else:
+                players_list = ", ".join(available_players)
+                return {
+                    "success": False,
+                    "error": (
+                        f"Player '{player_name}' not found on team. "
+                        f"Available players: {players_list}"
+                    ),
+                }
+
+        # Convert target_slot to slot ID
+        target_slot_upper = target_slot.upper()
+
+        # Special handling for BENCH and IR
+        if target_slot_upper == "BENCH":
+            target_slot_id = 20  # Bench slot
+        elif target_slot_upper == "IR":
+            target_slot_id = 21  # Injured Reserve slot
+        elif target_slot_upper not in POSITION_MAP:
+            valid_slots = ", ".join(
+                sorted([k for k in POSITION_MAP if isinstance(k, str)])
+            )
+            return {
+                "success": False,
+                "error": (
+                    f"Invalid slot '{target_slot}'. Valid slots: "
+                    f"{valid_slots}, BENCH, IR"
+                ),
+            }
+        else:
+            target_slot_id = POSITION_MAP[target_slot_upper]
+
+        previous_slot_id = target_player.slot_position
+        previous_slot = None
+
+        # Find the string representation of the previous slot
+        for slot_id, _position in POSITION_MAP.items():
+            if (
+                isinstance(slot_id, str)
+                and POSITION_MAP.get(slot_id) == previous_slot_id
+            ):
+                previous_slot = slot_id
+                break
+        if previous_slot is None:
+            previous_slot = previous_slot_id
+
+        # Build the roster entries for the PUT request
+        # We need to send all players with their current slots, but update
+        # the target player
+        roster_entries = []
+        for player in team.roster:
+            if player.player_id == target_player.player_id:
+                # This is the player we're moving - use the new slot
+                entry = {
+                    "playerId": player.player_id,
+                    "slotId": target_slot_id,
+                }
+            else:
+                # Keep other players in their current slots
+                entry = {
+                    "playerId": player.player_id,
+                    "slotId": player.slot_position,
+                }
+            roster_entries.append(entry)
+
+        # Prepare the request body
+        payload = {
+            "roster": {"entries": roster_entries},
+            "scoringPeriodId": league.current_week,
+        }
+
+        # Build the endpoint URL - use lm-api for write operations
+        endpoint = (
+            f"https://lm-api.fantasy.espn.com/apis/v3/games/ffl/"
+            f"seasons/{league.year}/segments/0/leagues/{league.league_id}/"
+            f"teams/{team_id}"
+        )
+
+        # Make the PUT request with the league's cookies
+        headers = {
+            "Content-Type": "application/json",
+            "x-fantasy-source": "kona",
+        }
+
+        # Get cookies from the league object
+        cookies = None
+        if hasattr(league, "espn_request") and hasattr(league.espn_request, "cookies"):
+            cookies = league.espn_request.cookies
+
+        response = requests.put(
+            endpoint, json=payload, headers=headers, cookies=cookies, timeout=10
+        )
+
+        # Check response status
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "player_name": target_player.name,
+                "previous_slot": previous_slot,
+                "new_slot": target_slot_upper,
+            }
+        elif response.status_code == 401:
+            return {
+                "success": False,
+                "error": "Authentication failed. Check your ESPN credentials.",
+            }
+        elif response.status_code == 403:
+            # This might be a "player locked" error or permissions issue
+            error_msg = response.text if response.text else "Access denied"
+            return {
+                "success": False,
+                "error": (
+                    f"Cannot update lineup: {error_msg}. Player may be locked "
+                    "or your account may not have permission."
+                ),
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"ESPN API returned status {response.status_code}: "
+                f"{response.text}",
+            }
+
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN API timed out. Please try again.",
+        }
+    except requests.exceptions.ConnectionError as e:
+        return {
+            "success": False,
+            "error": f"Connection error when contacting ESPN API: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error updating lineup: {e}",
         }
 
 

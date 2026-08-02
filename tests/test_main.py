@@ -8,7 +8,12 @@ from unittest.mock import MagicMock, patch
 # Add the root directory to the path so we can import main
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import get_current_matchups, get_team_roster, initialize_league
+from main import (
+    get_current_matchups,
+    get_team_roster,
+    initialize_league,
+    set_lineup_status,
+)
 
 
 def test_initialize_league_success():
@@ -680,3 +685,336 @@ def test_get_team_roster_generic_exception():
 
     assert result["success"] is False
     assert "Unexpected error fetching team roster" in result["error"]
+
+
+# Tests for set_lineup_status
+
+
+def test_set_lineup_status_with_none_league():
+    """Verify that set_lineup_status returns error when league is None."""
+    result = set_lineup_status(None, 1, "Player Name", "BENCH")
+
+    assert result["success"] is False
+    assert "League is None" in result["error"]
+
+
+def test_set_lineup_status_invalid_player_name():
+    """Verify that set_lineup_status returns error for invalid player_name."""
+    mock_league = MagicMock()
+
+    result = set_lineup_status(mock_league, 1, "", "BENCH")
+
+    assert result["success"] is False
+    assert "Invalid player_name" in result["error"]
+
+    result = set_lineup_status(mock_league, 1, None, "BENCH")
+
+    assert result["success"] is False
+    assert "Invalid player_name" in result["error"]
+
+
+def test_set_lineup_status_invalid_target_slot():
+    """Verify that set_lineup_status returns error for invalid target_slot."""
+    mock_league = MagicMock()
+
+    result = set_lineup_status(mock_league, 1, "Player Name", "")
+
+    assert result["success"] is False
+    assert "Invalid target_slot" in result["error"]
+
+    result = set_lineup_status(mock_league, 1, "Player Name", None)
+
+    assert result["success"] is False
+    assert "Invalid target_slot" in result["error"]
+
+
+def test_set_lineup_status_team_not_found():
+    """Verify that set_lineup_status returns error when team is not found."""
+    mock_league = MagicMock()
+    mock_league.teams = []
+
+    result = set_lineup_status(mock_league, 999, "Player Name", "BENCH")
+
+    assert result["success"] is False
+    assert "Team with ID 999 not found" in result["error"]
+
+
+def test_set_lineup_status_player_not_found():
+    """Verify that set_lineup_status returns error when player is not found."""
+    mock_player1 = MagicMock()
+    mock_player1.name = "John Doe"
+    mock_player1.player_id = 123
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player1]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+
+    result = set_lineup_status(mock_league, 1, "Nonexistent Player", "BENCH")
+
+    assert result["success"] is False
+    assert "Player 'Nonexistent Player' not found on team" in result["error"]
+
+
+def test_set_lineup_status_invalid_slot():
+    """Verify that set_lineup_status returns error for invalid slot."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+
+    result = set_lineup_status(mock_league, 1, "John Doe", "INVALID_SLOT")
+
+    assert result["success"] is False
+    assert "Invalid slot 'INVALID_SLOT'" in result["error"]
+
+
+def test_set_lineup_status_success():
+    """Verify that set_lineup_status successfully updates lineup."""
+    mock_player1 = MagicMock()
+    mock_player1.name = "John Doe"
+    mock_player1.player_id = 123
+    mock_player1.slot_position = 0  # QB
+
+    mock_player2 = MagicMock()
+    mock_player2.name = "Jane Smith"
+    mock_player2.player_id = 456
+    mock_player2.slot_position = 20  # BENCH
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player1, mock_player2]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {
+        "espn_s2": "test_s2",
+        "SWID": "test_swid",
+    }
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is True
+        assert result["player_name"] == "John Doe"
+        assert result["previous_slot"] == "QB"
+        assert result["new_slot"] == "BENCH"
+
+        # Verify PUT request was made
+        mock_put.assert_called_once()
+        call_args = mock_put.call_args
+        assert "https://lm-api.fantasy.espn.com" in call_args[0][0]
+        assert call_args[1]["json"]["scoringPeriodId"] == 5
+
+
+def test_set_lineup_status_player_fuzzy_match():
+    """Verify that set_lineup_status uses fuzzy matching for player names."""
+    mock_player = MagicMock()
+    mock_player.name = "Patrick Mahomes"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0  # QB
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, 1, "patrick mahomes", "BENCH")
+
+        assert result["success"] is True
+        assert result["player_name"] == "Patrick Mahomes"
+
+
+def test_set_lineup_status_api_authentication_error():
+    """Verify that set_lineup_status handles 401 authentication errors."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "Authentication failed" in result["error"]
+
+
+def test_set_lineup_status_player_locked_error():
+    """Verify that set_lineup_status handles 403 player locked errors."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Player is locked"
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "Cannot update lineup" in result["error"]
+        assert "Player may be locked" in result["error"]
+
+
+def test_set_lineup_status_api_error():
+    """Verify that set_lineup_status handles other ESPN API errors."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal server error"
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "ESPN API returned status 500" in result["error"]
+
+
+def test_set_lineup_status_timeout_error():
+    """Verify that set_lineup_status handles timeout errors."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        import requests
+
+        mock_put.side_effect = requests.exceptions.Timeout("Request timeout")
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "timed out" in result["error"]
+
+
+def test_set_lineup_status_connection_error():
+    """Verify that set_lineup_status handles connection errors."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        import requests
+
+        mock_put.side_effect = requests.exceptions.ConnectionError("Connection failed")
+
+        result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "Connection error" in result["error"]
+
+
+def test_set_lineup_status_generic_exception():
+    """Verify that set_lineup_status handles generic exceptions."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = ValueError("Unexpected error")
+    mock_league.teams = mock_teams
+
+    result = set_lineup_status(mock_league, 1, "John Doe", "BENCH")
+
+    assert result["success"] is False
+    assert "Unexpected error updating lineup" in result["error"]

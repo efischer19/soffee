@@ -1337,9 +1337,7 @@ def _format_roster_sweep_message(
         reason = violation.get("violation_reason", "unknown reason")
 
         reason_text = (
-            "bye week"
-            if reason.lower() == "bye"
-            else f"{reason.lower()} status"
+            "bye week" if reason.lower() == "bye" else f"{reason.lower()} status"
         )
         lines.append(f"❌ **{name}** ({position}) — {reason_text}")
 
@@ -1363,9 +1361,7 @@ def _format_roster_sweep_message(
         lines.append("_No free agent suggestions available for these positions._")
 
     lines.append("")
-    lines.append(
-        "💬 React with 👍 to confirm, or reply with your preferred picks!"
-    )
+    lines.append("💬 React with 👍 to confirm, or reply with your preferred picks!")
 
     return "\n".join(lines)
 

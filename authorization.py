@@ -70,4 +70,3 @@ def get_slack_user_for_team(team_id: int) -> str | None:
             return slack_user_id
 
     return None
-

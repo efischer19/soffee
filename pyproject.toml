@@ -1,2 +1,34 @@
+[project]
+name = "soffee"
+version = "0.1.0"
+description = "SOFFEE - An OpenClaw skill for fantasy football league management"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "efischer19"}
+]
+dependencies = [
+    "espn-api>=0.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.uv.workspace]
 members = ["apps/*", "libs/*"]

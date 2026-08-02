@@ -33,6 +33,67 @@ Fantasy football is fundamentally a social experience. SOFFEE augments human int
 - **Architecture**: Phase v0 monolithic deployment
 - **Output**: Slack channel messages and direct member interactions
 
+## Configuration
+
+### Slack Socket Mode Authentication
+
+Sofie connects to your Slack workspace using native [Slack Socket Mode](https://slack.dev/python-slack-sdk/socket-mode/), which provides a secure, bidirectional WebSocket connection managed by the OpenClaw framework.
+
+To enable Slack integration, configure the following environment variables:
+
+#### Required Environment Variables
+
+- **`SLACK_APP_TOKEN`**: Socket Mode App Token (format: `xapp-1-XXXXXXXXXXXXXXX`)
+  - Enables Socket Mode WebSocket connection
+  - Generated in Slack App settings under "Socket Mode"
+
+- **`SLACK_BOT_TOKEN`**: Bot User OAuth Token (format: `xoxb-XXXXXXXXXXXXXXX`)
+  - Authenticates API calls and message posting
+  - Generated in Slack App settings under "OAuth & Permissions"
+
+#### Setup Instructions
+
+1. **Create or open a Slack App**
+   - Visit [Slack API dashboard](https://api.slack.com/apps)
+   - Create a new app or select an existing one
+
+2. **Enable Socket Mode**
+   - Navigate to "Socket Mode" in the left menu
+   - Toggle "Enable Socket Mode" on
+   - Copy the generated **App Token** (starts with `xapp-1-`)
+
+3. **Configure OAuth Scopes**
+   - Navigate to "OAuth & Permissions"
+   - See [Required OAuth Scopes](#required-oauth-scopes) section below
+   - Copy the **Bot Token** (starts with `xoxb-`)
+
+4. **Set Environment Variables**
+   - Add `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN` to your environment
+   - Example `.env` file:
+   ```
+   SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX
+   SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX
+   ```
+
+### Required OAuth Scopes
+
+The following OAuth scopes must be granted to the Slack App for Sofie to function:
+
+#### Message & Conversation Scopes
+- `chat:write` — Post messages to channels and direct messages
+- `chat:write.public` — Post in public channels
+- `reactions:read` — Read message reactions
+- `channels:read` — List channels
+
+#### User & Profile Scopes
+- `users:read` — Read user profiles and information
+
+#### Event Subscriptions
+- Enable "Event Subscriptions" and subscribe to:
+  - `app_mention` — Respond when mentioned
+  - `message.channels` — Receive channel messages
+  - `message.im` — Receive direct messages
+
 ## Usage
 
 Invoke Sofie in your Slack channel with natural language queries:

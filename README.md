@@ -32,11 +32,13 @@ Sofie does not use a standard OAuth flow for individual league managers. Instead
 Because there is no official, public ESPN Fantasy API, Sofie authenticates by piggybacking on the Commissioner's browser session cookies (`SWID` and `espn_s2`). This gives the bot "Commissioner Access" to execute roster moves for *any* team in the league.
 
 ### How this impacts you (The Host)
+
 1. **You must provide your cookies:** To run Sofie, the Commissioner must extract their `SWID` and `espn_s2` cookies from their browser and place them in the `.env` file.
 2. **Never share your `.env`:** These cookies provide access to your *entire* ESPN account. **DO NOT commit them to GitHub.** If you are not the one hosting the OpenClaw server, you must implicitly trust the person who is.
 3. **The Slack ID Mapping is your firewall:** Because Sofie has the power to drop *any* player in the league, the `slack_to_espn_map.json` file is your only line of defense. Sofie cross-references the Slack User ID of the person issuing a command against this file before executing a move. You must configure this file accurately to prevent managers from modifying other people's rosters.
 
 ### Finding your ESPN Cookies
+
 1. Log into your ESPN Fantasy account on a desktop browser.
 2. Right-click anywhere and select **Inspect** to open Developer Tools.
 3. Go to the **Application** (Chrome/Edge) or **Storage** (Firefox) tab.

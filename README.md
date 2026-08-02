@@ -79,6 +79,7 @@ To deploy Sofie, your Slack App must request the following OAuth scopes:
 ### Event Subscriptions
 
 Enable Event Subscriptions in your Slack App and subscribe to:
+
 - `app_mention` — Listen for mentions of Sofie
 - `message.channels` — Listen to channel messages
 - `message.im` — Listen to direct messages

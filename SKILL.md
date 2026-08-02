@@ -70,7 +70,8 @@ To enable Slack integration, configure the following environment variables:
 4. **Set Environment Variables**
    - Add `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN` to your environment
    - Example `.env` file:
-   ```
+
+   ```bash
    SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX
    SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX
    ```
@@ -80,15 +81,18 @@ To enable Slack integration, configure the following environment variables:
 The following OAuth scopes must be granted to the Slack App for Sofie to function:
 
 #### Message & Conversation Scopes
+
 - `chat:write` — Post messages to channels and direct messages
 - `chat:write.public` — Post in public channels
 - `reactions:read` — Read message reactions
 - `channels:read` — List channels
 
 #### User & Profile Scopes
+
 - `users:read` — Read user profiles and information
 
 #### Event Subscriptions
+
 - Enable "Event Subscriptions" and subscribe to:
   - `app_mention` — Respond when mentioned
   - `message.channels` — Receive channel messages

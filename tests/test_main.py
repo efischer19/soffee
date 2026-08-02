@@ -762,7 +762,9 @@ def test_set_lineup_status_player_not_found(mock_verify_team_ownership):
     mock_league = MagicMock()
     mock_league.teams = [mock_team]
 
-    result = set_lineup_status(mock_league, "U1234567890", 1, "Nonexistent Player", "BENCH")
+    result = set_lineup_status(
+        mock_league, "U1234567890", 1, "Nonexistent Player", "BENCH"
+    )
 
     assert result["success"] is False
     assert "Player 'Nonexistent Player' not found on team" in result["error"]
@@ -782,7 +784,9 @@ def test_set_lineup_status_invalid_slot(mock_verify_team_ownership):
     mock_league = MagicMock()
     mock_league.teams = [mock_team]
 
-    result = set_lineup_status(mock_league, "U1234567890", 1, "John Doe", "INVALID_SLOT")
+    result = set_lineup_status(
+        mock_league, "U1234567890", 1, "John Doe", "INVALID_SLOT"
+    )
 
     assert result["success"] is False
     assert "Invalid slot 'INVALID_SLOT'" in result["error"]
@@ -858,7 +862,9 @@ def test_set_lineup_status_player_fuzzy_match(mock_verify_team_ownership):
         mock_response.status_code = 200
         mock_put.return_value = mock_response
 
-        result = set_lineup_status(mock_league, "U1234567890", 1, "patrick mahomes", "BENCH")
+        result = set_lineup_status(
+            mock_league, "U1234567890", 1, "patrick mahomes", "BENCH"
+        )
 
         assert result["success"] is True
         assert result["player_name"] == "Patrick Mahomes"
@@ -1044,7 +1050,9 @@ def test_process_waiver_transaction_with_none_league(mock_verify_team_ownership)
 def test_process_waiver_transaction_invalid_team_id_string(mock_verify_team_ownership):
     """Verify that process_waiver_transaction rejects non-integer team_id."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", "1", "Player", "Drop", 10)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", "1", "Player", "Drop", 10
+    )
 
     assert result["success"] is False
     assert "Invalid team_id" in result["error"]
@@ -1053,22 +1061,30 @@ def test_process_waiver_transaction_invalid_team_id_string(mock_verify_team_owne
 def test_process_waiver_transaction_invalid_team_id_zero(mock_verify_team_ownership):
     """Verify that process_waiver_transaction rejects zero team_id."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", 0, "Player", "Drop", 10)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 0, "Player", "Drop", 10
+    )
 
     assert result["success"] is False
     assert "Invalid team_id" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_team_id_negative(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_team_id_negative(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects negative team_id."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", -1, "Player", "Drop", 10)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", -1, "Player", "Drop", 10
+    )
 
     assert result["success"] is False
     assert "Invalid team_id" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_player_to_add_empty(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_player_to_add_empty(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects empty player_to_add."""
     mock_league = MagicMock()
     result = process_waiver_transaction(mock_league, "U1234567890", 1, "", "Drop", 10)
@@ -1077,7 +1093,9 @@ def test_process_waiver_transaction_invalid_player_to_add_empty(mock_verify_team
     assert "Invalid player_to_add" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_player_to_add_none(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_player_to_add_none(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects None player_to_add."""
     mock_league = MagicMock()
     result = process_waiver_transaction(mock_league, "U1234567890", 1, None, "Drop", 10)
@@ -1086,7 +1104,9 @@ def test_process_waiver_transaction_invalid_player_to_add_none(mock_verify_team_
     assert "Invalid player_to_add" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_player_to_add_type(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_player_to_add_type(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects non-string player_to_add."""
     mock_league = MagicMock()
     result = process_waiver_transaction(mock_league, "U1234567890", 1, 123, "Drop", 10)
@@ -1095,7 +1115,9 @@ def test_process_waiver_transaction_invalid_player_to_add_type(mock_verify_team_
     assert "Invalid player_to_add" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_player_to_drop_type(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_player_to_drop_type(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects non-string player_to_drop."""
     mock_league = MagicMock()
     result = process_waiver_transaction(mock_league, "U1234567890", 1, "Add", 123, 10)
@@ -1104,19 +1126,27 @@ def test_process_waiver_transaction_invalid_player_to_drop_type(mock_verify_team
     assert "Invalid player_to_drop" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_bid_amount_negative(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_bid_amount_negative(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects negative bid_amount."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Player", "Drop", -1)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Player", "Drop", -1
+    )
 
     assert result["success"] is False
     assert "Invalid bid_amount" in result["error"]
 
 
-def test_process_waiver_transaction_invalid_bid_amount_too_high(mock_verify_team_ownership):
+def test_process_waiver_transaction_invalid_bid_amount_too_high(
+    mock_verify_team_ownership,
+):
     """Verify that process_waiver_transaction rejects bid_amount > 999."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Player", "Drop", 1000)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Player", "Drop", 1000
+    )
 
     assert result["success"] is False
     assert "Invalid bid_amount" in result["error"]
@@ -1126,7 +1156,9 @@ def test_process_waiver_transaction_invalid_bid_amount_too_high(mock_verify_team
 def test_process_waiver_transaction_invalid_bid_amount_type(mock_verify_team_ownership):
     """Verify that process_waiver_transaction rejects non-integer bid_amount."""
     mock_league = MagicMock()
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Player", "Drop", "10")
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Player", "Drop", "10"
+    )
 
     assert result["success"] is False
     assert "Invalid bid_amount" in result["error"]
@@ -1139,7 +1171,9 @@ def test_process_waiver_transaction_team_not_found(mock_verify_team_ownership):
     mock_team.team_id = 2
     mock_league.teams = [mock_team]
 
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Player", "Drop", 10)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Player", "Drop", 10
+    )
 
     assert result["success"] is False
     assert "Team with ID 1 not found" in result["error"]
@@ -1159,7 +1193,9 @@ def test_process_waiver_transaction_player_to_add_not_found(mock_verify_team_own
     mock_league.teams = [mock_team]
     mock_league.players = []
 
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Nonexistent Player", None, 0)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Nonexistent Player", None, 0
+    )
 
     assert result["success"] is False
     assert "not found in league" in result["error"]
@@ -1185,13 +1221,17 @@ def test_process_waiver_transaction_player_already_on_team(mock_verify_team_owne
     mock_league.teams = [mock_team]
     mock_league.players = [mock_add_player]
 
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+    )
 
     assert result["success"] is False
     assert "already on" in result["error"]
 
 
-def test_process_waiver_transaction_player_to_drop_not_found(mock_verify_team_ownership):
+def test_process_waiver_transaction_player_to_drop_not_found(
+    mock_verify_team_ownership,
+):
     """Verify error when player to drop is not found on team roster."""
     mock_league = MagicMock()
     mock_league.year = 2024
@@ -1273,7 +1313,9 @@ def test_process_waiver_transaction_success_with_drop(mock_verify_team_ownership
         assert call_args[1]["json"]["transactions"][0]["droppedPlayerIds"] == [2]
 
 
-def test_process_waiver_transaction_success_free_agent_pickup(mock_verify_team_ownership):
+def test_process_waiver_transaction_success_free_agent_pickup(
+    mock_verify_team_ownership,
+):
     """Verify successful free agent pickup (no drop, zero bid)."""
     mock_league = MagicMock()
     mock_league.year = 2024
@@ -1300,7 +1342,9 @@ def test_process_waiver_transaction_success_free_agent_pickup(mock_verify_team_o
         mock_response.status_code = 200
         mock_post.return_value = mock_response
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is True
         assert result["player_added"] == "Patrick Mahomes"
@@ -1355,7 +1399,9 @@ def test_process_waiver_transaction_player_fuzzy_match(mock_verify_team_ownershi
         assert result["player_dropped"] == "Josh Allen"
 
 
-def test_process_waiver_transaction_api_authentication_error(mock_verify_team_ownership):
+def test_process_waiver_transaction_api_authentication_error(
+    mock_verify_team_ownership,
+):
     """Verify error handling for authentication failure."""
     mock_league = MagicMock()
     mock_league.year = 2024
@@ -1382,7 +1428,9 @@ def test_process_waiver_transaction_api_authentication_error(mock_verify_team_ow
         mock_response.status_code = 401
         mock_post.return_value = mock_response
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is False
         assert "Authentication failed" in result["error"]
@@ -1416,7 +1464,9 @@ def test_process_waiver_transaction_api_permission_error(mock_verify_team_owners
         mock_response.text = "Forbidden"
         mock_post.return_value = mock_response
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is False
         assert "Permission denied" in result["error"]
@@ -1450,7 +1500,9 @@ def test_process_waiver_transaction_api_error(mock_verify_team_ownership):
         mock_response.text = "Internal Server Error"
         mock_post.return_value = mock_response
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is False
         assert "ESPN API returned status 500" in result["error"]
@@ -1483,7 +1535,9 @@ def test_process_waiver_transaction_timeout_error(mock_verify_team_ownership):
 
         mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is False
         assert "timed out" in result["error"]
@@ -1516,7 +1570,9 @@ def test_process_waiver_transaction_connection_error(mock_verify_team_ownership)
 
         mock_post.side_effect = requests.exceptions.ConnectionError("Connection failed")
 
-        result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+        )
 
         assert result["success"] is False
         assert "Connection error" in result["error"]
@@ -1529,7 +1585,9 @@ def test_process_waiver_transaction_generic_exception(mock_verify_team_ownership
     mock_teams.__iter__.side_effect = ValueError("Unexpected error")
     mock_league.teams = mock_teams
 
-    result = process_waiver_transaction(mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0)
+    result = process_waiver_transaction(
+        mock_league, "U1234567890", 1, "Patrick Mahomes", None, 0
+    )
 
     assert result["success"] is False
     assert "Unexpected error processing transaction" in result["error"]
@@ -1537,17 +1595,20 @@ def test_process_waiver_transaction_generic_exception(mock_verify_team_ownership
 
 # Authorization Tests
 
+
 class TestSetLineupStatusAuthorization:
     """Test suite for authorization validation in set_lineup_status."""
 
     def test_set_lineup_status_unauthorized_user(self):
         """Verify that set_lineup_status rejects an unauthorized user."""
         mock_league = MagicMock()
-        
+
         # Use mock that returns False for unauthorized user
         with patch("main.verify_team_ownership", return_value=False):
-            result = set_lineup_status(mock_league, "UUNAUTHORIZED", 1, "Player", "BENCH")
-        
+            result = set_lineup_status(
+                mock_league, "UUNAUTHORIZED", 1, "Player", "BENCH"
+            )
+
         assert result["success"] is False
         assert "Unauthorized" in result["error"]
         assert "UUNAUTHORIZED" in result["error"]
@@ -1570,10 +1631,12 @@ class TestSetLineupStatusAuthorization:
         # Mock the API call for updating lineup
         with patch("main.requests.post") as mock_post:
             mock_post.return_value.status_code = 200
-            
+
             with patch("main.verify_team_ownership", return_value=True):
-                result = set_lineup_status(mock_league, "UAUTHORIZED", 1, "Patrick Mahomes", "BENCH")
-        
+                result = set_lineup_status(
+                    mock_league, "UAUTHORIZED", 1, "Patrick Mahomes", "BENCH"
+                )
+
         # Should pass authorization and attempt the update
         # (may fail on other validations, but not on authorization)
         assert result["success"] is True or result["error"] != "Unauthorized"
@@ -1585,13 +1648,13 @@ class TestProcessWaiverTransactionAuthorization:
     def test_process_waiver_transaction_unauthorized_user(self):
         """Verify that process_waiver_transaction rejects an unauthorized user."""
         mock_league = MagicMock()
-        
+
         # Use mock that returns False for unauthorized user
         with patch("main.verify_team_ownership", return_value=False):
             result = process_waiver_transaction(
                 mock_league, "UUNAUTHORIZED", 1, "Player", None, 5
             )
-        
+
         assert result["success"] is False
         assert "Unauthorized" in result["error"]
         assert "UUNAUTHORIZED" in result["error"]
@@ -1619,12 +1682,12 @@ class TestProcessWaiverTransactionAuthorization:
         # Mock the API call for adding player
         with patch("main.requests.post") as mock_post:
             mock_post.return_value.status_code = 200
-            
+
             with patch("main.verify_team_ownership", return_value=True):
                 result = process_waiver_transaction(
                     mock_league, "UAUTHORIZED", 1, "Patrick Mahomes", None, 5
                 )
-        
+
         # Should pass authorization and attempt the transaction
         # (may fail on other validations, but not on authorization)
         assert result["success"] is True or result["error"] != "Unauthorized"

@@ -338,8 +338,7 @@ def set_lineup_status(
         return {
             "success": False,
             "error": (
-                f"Unauthorized: Slack user {slack_user_id} does not own team"
-                f" {team_id}"
+                f"Unauthorized: Slack user {slack_user_id} does not own team {team_id}"
             ),
         }
 
@@ -588,8 +587,7 @@ def process_waiver_transaction(
         return {
             "success": False,
             "error": (
-                f"Unauthorized: Slack user {slack_user_id} does not own team"
-                f" {team_id}"
+                f"Unauthorized: Slack user {slack_user_id} does not own team {team_id}"
             ),
         }
 

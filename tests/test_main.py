@@ -12,6 +12,7 @@ from main import (
     get_current_matchups,
     get_team_roster,
     initialize_league,
+    process_waiver_transaction,
     set_lineup_status,
 )
 
@@ -1018,3 +1019,508 @@ def test_set_lineup_status_generic_exception():
 
     assert result["success"] is False
     assert "Unexpected error updating lineup" in result["error"]
+
+
+# Tests for process_waiver_transaction
+
+
+def test_process_waiver_transaction_with_none_league():
+    """Verify that process_waiver_transaction returns error when league is None."""
+    result = process_waiver_transaction(None, 1, "Player", "Drop", 10)
+
+    assert result["success"] is False
+    assert "League is None" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_team_id_string():
+    """Verify that process_waiver_transaction rejects non-integer team_id."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, "1", "Player", "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid team_id" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_team_id_zero():
+    """Verify that process_waiver_transaction rejects zero team_id."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 0, "Player", "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid team_id" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_team_id_negative():
+    """Verify that process_waiver_transaction rejects negative team_id."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, -1, "Player", "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid team_id" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_player_to_add_empty():
+    """Verify that process_waiver_transaction rejects empty player_to_add."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, "", "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid player_to_add" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_player_to_add_none():
+    """Verify that process_waiver_transaction rejects None player_to_add."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, None, "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid player_to_add" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_player_to_add_type():
+    """Verify that process_waiver_transaction rejects non-string player_to_add."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, 123, "Drop", 10)
+
+    assert result["success"] is False
+    assert "Invalid player_to_add" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_player_to_drop_type():
+    """Verify that process_waiver_transaction rejects non-string player_to_drop."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, "Add", 123, 10)
+
+    assert result["success"] is False
+    assert "Invalid player_to_drop" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_bid_amount_negative():
+    """Verify that process_waiver_transaction rejects negative bid_amount."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, "Player", "Drop", -1)
+
+    assert result["success"] is False
+    assert "Invalid bid_amount" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_bid_amount_too_high():
+    """Verify that process_waiver_transaction rejects bid_amount > 999."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, "Player", "Drop", 1000)
+
+    assert result["success"] is False
+    assert "Invalid bid_amount" in result["error"]
+    assert "not exceed 999" in result["error"]
+
+
+def test_process_waiver_transaction_invalid_bid_amount_type():
+    """Verify that process_waiver_transaction rejects non-integer bid_amount."""
+    mock_league = MagicMock()
+    result = process_waiver_transaction(mock_league, 1, "Player", "Drop", "10")
+
+    assert result["success"] is False
+    assert "Invalid bid_amount" in result["error"]
+
+
+def test_process_waiver_transaction_team_not_found():
+    """Verify that process_waiver_transaction returns error when team not found."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_id = 2
+    mock_league.teams = [mock_team]
+
+    result = process_waiver_transaction(mock_league, 1, "Player", "Drop", 10)
+
+    assert result["success"] is False
+    assert "Team with ID 1 not found" in result["error"]
+
+
+def test_process_waiver_transaction_player_to_add_not_found():
+    """Verify error when player to add is not found in league."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = []
+
+    result = process_waiver_transaction(mock_league, 1, "Nonexistent Player", None, 0)
+
+    assert result["success"] is False
+    assert "not found in league" in result["error"]
+
+
+def test_process_waiver_transaction_player_already_on_team():
+    """Verify error when player to add is already on the team."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+
+    # Create mock player to add
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team with the player already on roster
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = [mock_add_player]
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+    assert result["success"] is False
+    assert "already on" in result["error"]
+
+
+def test_process_waiver_transaction_player_to_drop_not_found():
+    """Verify error when player to drop is not found on team roster."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    mock_existing_player = MagicMock()
+    mock_existing_player.player_id = 2
+    mock_existing_player.name = "Josh Allen"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = [mock_existing_player]
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player, mock_existing_player]
+
+    result = process_waiver_transaction(
+        mock_league, 1, "Patrick Mahomes", "Nonexistent Player", 10
+    )
+
+    assert result["success"] is False
+    assert "not found on" in result["error"]
+
+
+def test_process_waiver_transaction_success_with_drop():
+    """Verify successful waiver transaction with player drop."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    mock_drop_player = MagicMock()
+    mock_drop_player.player_id = 2
+    mock_drop_player.name = "Josh Allen"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = [mock_drop_player]
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player, mock_drop_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(
+            mock_league, 1, "Patrick Mahomes", "Josh Allen", 10
+        )
+
+        assert result["success"] is True
+        assert result["player_added"] == "Patrick Mahomes"
+        assert result["player_dropped"] == "Josh Allen"
+        assert result["bid_amount"] == 10
+        assert result["transaction_type"] == "WAIVER"
+
+        # Verify the POST request was made correctly
+        call_args = mock_post.call_args
+        assert "transactions" in call_args[1]["json"]
+        assert call_args[1]["json"]["transactions"][0]["type"] == "WAIVER"
+        assert call_args[1]["json"]["transactions"][0]["bidAmount"] == 10
+        assert call_args[1]["json"]["transactions"][0]["addedPlayerIds"] == [1]
+        assert call_args[1]["json"]["transactions"][0]["droppedPlayerIds"] == [2]
+
+
+def test_process_waiver_transaction_success_free_agent_pickup():
+    """Verify successful free agent pickup (no drop, zero bid)."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock player
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is True
+        assert result["player_added"] == "Patrick Mahomes"
+        assert result["player_dropped"] is None
+        assert result["bid_amount"] == 0
+        assert result["transaction_type"] == "FREEAGENT"
+
+        # Verify the POST request
+        call_args = mock_post.call_args
+        assert call_args[1]["json"]["transactions"][0]["type"] == "FREEAGENT"
+        assert call_args[1]["json"]["transactions"][0]["droppedPlayerIds"] == []
+
+
+def test_process_waiver_transaction_player_fuzzy_match():
+    """Verify fuzzy matching works for player names."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    mock_drop_player = MagicMock()
+    mock_drop_player.player_id = 2
+    mock_drop_player.name = "Josh Allen"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = [mock_drop_player]
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player, mock_drop_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        # Use slightly misspelled names that should fuzzy match
+        result = process_waiver_transaction(
+            mock_league, 1, "Patrick Mahome", "Josh Alen", 5
+        )
+
+        assert result["success"] is True
+        assert result["player_added"] == "Patrick Mahomes"
+        assert result["player_dropped"] == "Josh Allen"
+
+
+def test_process_waiver_transaction_api_authentication_error():
+    """Verify error handling for authentication failure."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is False
+        assert "Authentication failed" in result["error"]
+
+
+def test_process_waiver_transaction_api_permission_error():
+    """Verify error handling for permission denied."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.text = "Forbidden"
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is False
+        assert "Permission denied" in result["error"]
+
+
+def test_process_waiver_transaction_api_error():
+    """Verify error handling for API errors."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is False
+        assert "ESPN API returned status 500" in result["error"]
+
+
+def test_process_waiver_transaction_timeout_error():
+    """Verify timeout error handling."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        import requests
+
+        mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is False
+        assert "timed out" in result["error"]
+
+
+def test_process_waiver_transaction_connection_error():
+    """Verify connection error handling."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    # Create mock players
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    # Create mock team
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        import requests
+
+        mock_post.side_effect = requests.exceptions.ConnectionError("Connection failed")
+
+        result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+        assert result["success"] is False
+        assert "Connection error" in result["error"]
+
+
+def test_process_waiver_transaction_generic_exception():
+    """Verify generic exception handling."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = ValueError("Unexpected error")
+    mock_league.teams = mock_teams
+
+    result = process_waiver_transaction(mock_league, 1, "Patrick Mahomes", None, 0)
+
+    assert result["success"] is False
+    assert "Unexpected error processing transaction" in result["error"]

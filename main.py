@@ -514,6 +514,288 @@ def set_lineup_status(
         }
 
 
+def process_waiver_transaction(
+    league: League | None,
+    team_id: int,
+    player_to_add: str,
+    player_to_drop: str | None,
+    bid_amount: int,
+) -> dict[str, Any]:
+    """
+    Process a waiver wire claim or free agent addition transaction.
+
+    This function executes an add/drop or waiver claim via the ESPN Fantasy
+    Football API. It supports both free agent pickups and FAAB waiver claims
+    (depending on league settings).
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        team_id: The ID of the team processing the transaction.
+        player_to_add: The full name of the player to add. Supports fuzzy matching.
+        player_to_drop: The full name of the player to drop, or None for free agent
+                       pickup. Supports fuzzy matching.
+        bid_amount: The FAAB bid amount (in currency units, typically $1-999).
+                   Must be a positive integer.
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the transaction succeeded
+            - transaction_type (str): Type of transaction ("WAIVER" or "FREEAGENT")
+            - team_id (int): The team ID that made the transaction
+            - player_added (str): Name of the player added
+            - player_dropped (str): Name of the player dropped (if any)
+            - bid_amount (int): The FAAB bid used
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = process_waiver_transaction(
+        ...     league, 1, "Patrick Mahomes", "Backup QB", 5
+        ... )
+        >>> if result['success']:
+        ...     print(f"Added {result['player_added']}")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot process transaction.",
+        }
+
+    # Validate team_id
+    if not isinstance(team_id, int) or team_id <= 0:
+        return {
+            "success": False,
+            "error": "Invalid team_id: must be a positive integer.",
+        }
+
+    # Validate player_to_add
+    if not player_to_add or not isinstance(player_to_add, str):
+        return {
+            "success": False,
+            "error": "Invalid player_to_add: must be a non-empty string.",
+        }
+
+    # Validate player_to_drop (can be None)
+    if player_to_drop is not None and not isinstance(player_to_drop, str):
+        return {
+            "success": False,
+            "error": "Invalid player_to_drop: must be a string or None.",
+        }
+
+    # Validate bid_amount
+    if not isinstance(bid_amount, int) or bid_amount < 0:
+        return {
+            "success": False,
+            "error": "Invalid bid_amount: must be a non-negative integer.",
+        }
+
+    if bid_amount > 999:
+        return {
+            "success": False,
+            "error": "Invalid bid_amount: must not exceed 999.",
+        }
+
+    try:
+        # Get the team
+        team = None
+        for t in league.teams:
+            if t.team_id == team_id:
+                team = t
+                break
+
+        if team is None:
+            return {
+                "success": False,
+                "error": f"Team with ID {team_id} not found in league.",
+            }
+
+        # Find the player to add from all available players in the league
+        # This includes players not on any roster (free agents) and potentially
+        # players on other rosters (for trade/waiver scenarios)
+        add_player = None
+        add_player_id = None
+
+        # Search through all league players (requires access to full player list)
+        # First, try to find the player in free agents by getting all players
+        try:
+            # Use league's player list if available
+            if hasattr(league, "players"):
+                available_players = league.players
+            else:
+                # Fallback: search through all teams to build player list
+                available_players = []
+                for t in league.teams:
+                    available_players.extend(t.roster)
+
+            # Get list of player names for fuzzy matching
+            player_names = [p.name for p in available_players]
+
+            # Try exact match first (case-insensitive)
+            for player in available_players:
+                if player.name.lower() == player_to_add.lower():
+                    add_player = player
+                    add_player_id = player.player_id
+                    break
+
+            # If no exact match, use fuzzy matching
+            if add_player_id is None:
+                matches = get_close_matches(
+                    player_to_add, player_names, n=1, cutoff=0.6
+                )
+                if matches:
+                    matched_name = matches[0]
+                    for player in available_players:
+                        if player.name == matched_name:
+                            add_player = player
+                            add_player_id = player.player_id
+                            break
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Player '{player_to_add}' not found in league.",
+                    }
+        except (AttributeError, TypeError) as e:
+            return {
+                "success": False,
+                "error": f"Unable to search for player: {e}",
+            }
+
+        # Check if player is already on this team
+        for player in team.roster:
+            if player.player_id == add_player_id:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Player '{add_player.name}' is already on "
+                        f"{team.team_name}'s roster."
+                    ),
+                }
+
+        # Find the player to drop from the team's roster (if specified)
+        drop_player = None
+        drop_player_id = None
+
+        if player_to_drop:
+            team_player_names = [p.name for p in team.roster]
+
+            # Try exact match first (case-insensitive)
+            for player in team.roster:
+                if player.name.lower() == player_to_drop.lower():
+                    drop_player = player
+                    drop_player_id = player.player_id
+                    break
+
+            # If no exact match, use fuzzy matching
+            if drop_player_id is None:
+                matches = get_close_matches(
+                    player_to_drop, team_player_names, n=1, cutoff=0.6
+                )
+                if matches:
+                    matched_name = matches[0]
+                    for player in team.roster:
+                        if player.name == matched_name:
+                            drop_player = player
+                            drop_player_id = player.player_id
+                            break
+                else:
+                    return {
+                        "success": False,
+                        "error": (
+                            f"Player '{player_to_drop}' not found on "
+                            f"{team.team_name}'s roster."
+                        ),
+                    }
+
+        # Determine transaction type based on bid_amount
+        # If bid_amount is 0 and there's a drop, or no drop, it's a free agent pickup
+        # If bid_amount > 0, it's a waiver claim (FAAB)
+        transaction_type = "WAIVER" if bid_amount > 0 else "FREEAGENT"
+
+        # Build the transaction payload
+        payload = {
+            "transactions": [
+                {
+                    "type": transaction_type,
+                    "tradedPlayers": [],
+                    "addedPlayerIds": [add_player_id],
+                    "droppedPlayerIds": [drop_player_id] if drop_player_id else [],
+                    "bidAmount": bid_amount,
+                }
+            ]
+        }
+
+        # Build the endpoint URL
+        endpoint = (
+            f"https://lm-api.fantasy.espn.com/apis/v3/games/ffl/"
+            f"seasons/{league.year}/segments/0/leagues/{league.league_id}/"
+            f"transactions"
+        )
+
+        # Prepare headers
+        headers = {
+            "Content-Type": "application/json",
+            "x-fantasy-source": "kona",
+        }
+
+        # Get cookies from the league object
+        cookies = None
+        if hasattr(league, "espn_request") and hasattr(league.espn_request, "cookies"):
+            cookies = league.espn_request.cookies
+
+        # Make the POST request
+        response = requests.post(
+            endpoint, json=payload, headers=headers, cookies=cookies, timeout=10
+        )
+
+        # Check response status
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "transaction_type": transaction_type,
+                "team_id": team_id,
+                "player_added": add_player.name,
+                "player_dropped": drop_player.name if drop_player else None,
+                "bid_amount": bid_amount,
+            }
+        elif response.status_code == 401:
+            return {
+                "success": False,
+                "error": "Authentication failed. Check your ESPN credentials.",
+            }
+        elif response.status_code == 403:
+            error_msg = response.text if response.text else "Access denied"
+            return {
+                "success": False,
+                "error": f"Permission denied: {error_msg}",
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"ESPN API returned status {response.status_code}: "
+                f"{response.text}",
+            }
+
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN API timed out. Please try again.",
+        }
+    except requests.exceptions.ConnectionError as e:
+        return {
+            "success": False,
+            "error": f"Connection error when contacting ESPN API: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error processing transaction: {e}",
+        }
+
+
 def main():
     """
     Main entry point for the SOFFEE OpenClaw skill.

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 # Add the root directory to the path so we can import main
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import get_current_matchups, initialize_league
+from main import get_current_matchups, get_team_roster, initialize_league
 
 
 def test_initialize_league_success():
@@ -367,3 +367,316 @@ def test_get_current_matchups_score_rounding():
     assert matchup["away_score"] == 118.26
     assert matchup["home_projected"] == 135.75
     assert matchup["away_projected"] == 130.00
+
+
+def test_get_team_roster_with_none_league():
+    """Verify that get_team_roster returns error when league is None."""
+    result = get_team_roster(None, "Test Team")
+
+    assert result["success"] is False
+    assert "League is None" in result["error"]
+
+
+def test_get_team_roster_invalid_team_name():
+    """Verify that get_team_roster handles invalid team names."""
+    mock_league = MagicMock()
+    mock_league.teams = []
+
+    result = get_team_roster(mock_league, "")
+
+    assert result["success"] is False
+    assert "Invalid team_name" in result["error"]
+
+
+def test_get_team_roster_team_not_found():
+    """Verify that get_team_roster returns error when team is not found."""
+    mock_league = MagicMock()
+    mock_team_a = MagicMock()
+    mock_team_a.team_name = "Kansas City Chiefs"
+    mock_team_b = MagicMock()
+    mock_team_b.team_name = "Dallas Cowboys"
+    mock_league.teams = [mock_team_a, mock_team_b]
+
+    result = get_team_roster(mock_league, "Nonexistent Team")
+
+    assert result["success"] is False
+    assert "not found" in result["error"]
+    assert "Kansas City Chiefs" in result["error"]
+    assert "Dallas Cowboys" in result["error"]
+
+
+def test_get_team_roster_exact_match():
+    """Verify that get_team_roster finds teams with exact name match."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Kansas City Chiefs"
+
+    # Create mock players
+    mock_player1 = MagicMock()
+    mock_player1.name = "Patrick Mahomes"
+    mock_player1.position = "QB"
+    mock_player1.injuryStatus = ""
+
+    mock_player2 = MagicMock()
+    mock_player2.name = "Travis Kelce"
+    mock_player2.position = "TE"
+    mock_player2.injuryStatus = ""
+
+    mock_team.roster = [mock_player1, mock_player2]
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "Kansas City Chiefs")
+
+    assert result["success"] is True
+    assert result["team_name"] == "Kansas City Chiefs"
+    assert len(result["roster"]) == 2
+
+
+def test_get_team_roster_case_insensitive_match():
+    """Verify that get_team_roster handles case-insensitive team names."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Kansas City Chiefs"
+
+    mock_player = MagicMock()
+    mock_player.name = "Patrick Mahomes"
+    mock_player.position = "QB"
+    mock_player.injuryStatus = ""
+
+    mock_team.roster = [mock_player]
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "kansas city chiefs")
+
+    assert result["success"] is True
+    assert result["team_name"] == "Kansas City Chiefs"
+    assert len(result["roster"]) == 1
+
+
+def test_get_team_roster_fuzzy_match():
+    """Verify that get_team_roster uses fuzzy matching for partial names."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Kansas City Chiefs"
+
+    mock_player = MagicMock()
+    mock_player.name = "Patrick Mahomes"
+    mock_player.position = "QB"
+    mock_player.injuryStatus = ""
+
+    mock_team.roster = [mock_player]
+    mock_league.teams = [mock_team]
+
+    # Test with a partial/misspelled name
+    result = get_team_roster(mock_league, "Kansas City")
+
+    assert result["success"] is True
+    assert result["team_name"] == "Kansas City Chiefs"
+
+
+def test_get_team_roster_player_with_injury():
+    """Verify that get_team_roster includes injury status for injured players."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Dallas Cowboys"
+
+    # Create mock players - one healthy, one injured
+    mock_player_healthy = MagicMock()
+    mock_player_healthy.name = "CeeDee Lamb"
+    mock_player_healthy.position = "WR"
+    mock_player_healthy.injuryStatus = ""
+
+    mock_player_injured = MagicMock()
+    mock_player_injured.name = "Dak Prescott"
+    mock_player_injured.position = "QB"
+    mock_player_injured.injuryStatus = "Out"
+
+    mock_team.roster = [mock_player_healthy, mock_player_injured]
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "Dallas Cowboys")
+
+    assert result["success"] is True
+    assert len(result["roster"]) == 2
+
+    # Check injury status
+    injured_player = next(p for p in result["roster"] if p["name"] == "Dak Prescott")
+    assert injured_player["injury_status"] == "Out"
+
+    healthy_player = next(p for p in result["roster"] if p["name"] == "CeeDee Lamb")
+    assert healthy_player["injury_status"] == ""
+
+
+def test_get_team_roster_various_injury_statuses():
+    """Verify that get_team_roster handles various injury status values."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "San Francisco 49ers"
+
+    # Create players with different injury statuses
+    injury_statuses = ["", "Out", "Day to Day", "Questionable", "Probable"]
+    players = []
+    for i, status in enumerate(injury_statuses):
+        mock_player = MagicMock()
+        mock_player.name = f"Player {i}"
+        mock_player.position = "WR"
+        mock_player.injuryStatus = status
+        players.append(mock_player)
+
+    mock_team.roster = players
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "San Francisco 49ers")
+
+    assert result["success"] is True
+    assert len(result["roster"]) == 5
+
+    for i, status in enumerate(injury_statuses):
+        player = result["roster"][i]
+        assert player["injury_status"] == status
+
+
+def test_get_team_roster_empty_roster():
+    """Verify that get_team_roster handles teams with empty rosters."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Rebuild Team"
+    mock_team.roster = []
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "Rebuild Team")
+
+    assert result["success"] is True
+    assert result["team_name"] == "Rebuild Team"
+    assert result["roster"] == []
+
+
+def test_get_team_roster_sorting():
+    """Verify that get_team_roster returns roster sorted by position then name."""
+    mock_league = MagicMock()
+    mock_team = MagicMock()
+    mock_team.team_name = "Test Team"
+
+    # Create players in random order
+    mock_player_wr2 = MagicMock()
+    mock_player_wr2.name = "Zay Jones"
+    mock_player_wr2.position = "WR"
+    mock_player_wr2.injuryStatus = ""
+
+    mock_player_qb = MagicMock()
+    mock_player_qb.name = "Aaron Rodgers"
+    mock_player_qb.position = "QB"
+    mock_player_qb.injuryStatus = ""
+
+    mock_player_wr1 = MagicMock()
+    mock_player_wr1.name = "Adam Thielen"
+    mock_player_wr1.position = "WR"
+    mock_player_wr1.injuryStatus = ""
+
+    mock_player_rb = MagicMock()
+    mock_player_rb.name = "Josh Jacobs"
+    mock_player_rb.position = "RB"
+    mock_player_rb.injuryStatus = ""
+
+    mock_team.roster = [
+        mock_player_wr2,
+        mock_player_qb,
+        mock_player_wr1,
+        mock_player_rb,
+    ]
+    mock_league.teams = [mock_team]
+
+    result = get_team_roster(mock_league, "Test Team")
+
+    assert result["success"] is True
+    roster = result["roster"]
+    # Verify sorting: QB, RB, then WRs alphabetically
+    assert roster[0]["position"] == "QB"
+    assert roster[1]["position"] == "RB"
+    assert roster[2]["position"] == "WR"
+    assert roster[2]["name"] == "Adam Thielen"
+    assert roster[3]["position"] == "WR"
+    assert roster[3]["name"] == "Zay Jones"
+
+
+def test_get_team_roster_multiple_teams():
+    """Verify that get_team_roster can find correct team when multiple exist."""
+    mock_league = MagicMock()
+
+    # Create multiple teams
+    mock_team1 = MagicMock()
+    mock_team1.team_name = "Team A"
+    mock_player1 = MagicMock()
+    mock_player1.name = "Player A1"
+    mock_player1.position = "QB"
+    mock_player1.injuryStatus = ""
+    mock_team1.roster = [mock_player1]
+
+    mock_team2 = MagicMock()
+    mock_team2.team_name = "Team B"
+    mock_player2 = MagicMock()
+    mock_player2.name = "Player B1"
+    mock_player2.position = "RB"
+    mock_player2.injuryStatus = ""
+    mock_team2.roster = [mock_player2]
+
+    mock_league.teams = [mock_team1, mock_team2]
+
+    # Test retrieval of Team B
+    result = get_team_roster(mock_league, "Team B")
+
+    assert result["success"] is True
+    assert result["team_name"] == "Team B"
+    assert result["roster"][0]["name"] == "Player B1"
+
+
+def test_get_team_roster_attribute_error():
+    """Verify that get_team_roster handles attribute errors gracefully."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = AttributeError("Missing attribute")
+    mock_league.teams = mock_teams
+
+    result = get_team_roster(mock_league, "Test Team")
+
+    assert result["success"] is False
+    assert "Invalid league data structure" in result["error"]
+
+
+def test_get_team_roster_connection_error():
+    """Verify that get_team_roster handles connection errors gracefully."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = ConnectionError("Connection failed")
+    mock_league.teams = mock_teams
+
+    result = get_team_roster(mock_league, "Test Team")
+
+    assert result["success"] is False
+    assert "API connection error" in result["error"]
+
+
+def test_get_team_roster_timeout_error():
+    """Verify that get_team_roster handles timeout errors gracefully."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = TimeoutError("Request timeout")
+    mock_league.teams = mock_teams
+
+    result = get_team_roster(mock_league, "Test Team")
+
+    assert result["success"] is False
+    assert "API connection error" in result["error"]
+
+
+def test_get_team_roster_generic_exception():
+    """Verify that get_team_roster handles generic exceptions gracefully."""
+    mock_league = MagicMock()
+    mock_teams = MagicMock()
+    mock_teams.__iter__.side_effect = ValueError("Unexpected error")
+    mock_league.teams = mock_teams
+
+    result = get_team_roster(mock_league, "Test Team")
+
+    assert result["success"] is False
+    assert "Unexpected error fetching team roster" in result["error"]

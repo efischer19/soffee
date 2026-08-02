@@ -173,6 +173,88 @@ def get_current_matchups(league: League | None) -> dict[str, Any]:
         }
 
 
+def generate_batch_score_summary(league: League | None) -> dict[str, Any]:
+    """
+    Generate a structured, plain-text summary of the entire league's scoreboard.
+
+    This function retrieves all current matchups for the week and formats them
+    into a clean, non-conversational plain-text summary. The summary is designed
+    to provide raw, structured data that an LLM can use to generate conversational
+    updates for automated Slack broadcasts.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - week (int): The current week number
+            - summary (str): Plain-text formatted summary of all matchups
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = generate_batch_score_summary(league)
+        >>> if result['success']:
+        ...     print(result['summary'])
+
+    The summary format is structured plain-text, not conversational:
+        Week 5 Summary
+
+        Matchup 1: Team A vs Team B
+          Team A: 125.50 (Projected: 135.75)
+          Team B: 118.25 (Projected: 130.00)
+
+        Matchup 2: Team C vs Team D
+          Team C: 120.00 (Projected: 130.00)
+          Team D: 115.50 (Projected: 125.00)
+    """
+    # Get current matchups
+    matchups_response = get_current_matchups(league)
+
+    if not matchups_response["success"]:
+        return {
+            "success": False,
+            "error": matchups_response.get("error", "Failed to retrieve matchups"),
+        }
+
+    week = matchups_response["week"]
+    matchups = matchups_response["matchups"]
+
+    # Build the summary
+    summary_lines = [f"Week {week} Summary\n"]
+
+    if not matchups:
+        summary_lines.append("No matchups found for this week.")
+        return {
+            "success": True,
+            "week": week,
+            "summary": "\n".join(summary_lines),
+        }
+
+    for i, matchup in enumerate(matchups, 1):
+        home_team = matchup["home_team"]
+        away_team = matchup["away_team"]
+        home_score = matchup["home_score"]
+        away_score = matchup["away_score"]
+        home_projected = matchup["home_projected"]
+        away_projected = matchup["away_projected"]
+
+        summary_lines.append(f"\nMatchup {i}: {home_team} vs {away_team}")
+        summary_lines.append(
+            f"  {home_team}: {home_score} (Projected: {home_projected})"
+        )
+        summary_lines.append(
+            f"  {away_team}: {away_score} (Projected: {away_projected})"
+        )
+
+    return {
+        "success": True,
+        "week": week,
+        "summary": "\n".join(summary_lines),
+    }
+
+
 def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
     """
     Retrieve a team's active roster with player positions and injury statuses.

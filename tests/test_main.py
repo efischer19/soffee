@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from main import (
+    generate_batch_score_summary,
     get_current_matchups,
     get_team_roster,
     initialize_league,
@@ -382,6 +383,164 @@ def test_get_current_matchups_score_rounding():
     assert matchup["away_score"] == 118.26
     assert matchup["home_projected"] == 135.75
     assert matchup["away_projected"] == 130.00
+
+
+def test_generate_batch_score_summary_with_none_league():
+    """Verify that generate_batch_score_summary returns error when league is None."""
+    result = generate_batch_score_summary(None)
+
+    assert result["success"] is False
+    assert "error" in result
+    assert result["error"] is not None
+
+
+def test_generate_batch_score_summary_success():
+    """Verify that generate_batch_score_summary formats matchup data correctly."""
+    mock_league = MagicMock()
+    mock_league.current_week = 5
+
+    mock_home_team = MagicMock()
+    mock_home_team.team_name = "Team A"
+
+    mock_away_team = MagicMock()
+    mock_away_team.team_name = "Team B"
+
+    mock_box_score = MagicMock()
+    mock_box_score.home_team = mock_home_team
+    mock_box_score.away_team = mock_away_team
+    mock_box_score.home_score = 125.50
+    mock_box_score.away_score = 118.25
+    mock_box_score.home_projected = 135.75
+    mock_box_score.away_projected = 130.00
+
+    mock_league.box_scores.return_value = [mock_box_score]
+
+    result = generate_batch_score_summary(mock_league)
+
+    assert result["success"] is True
+    assert result["week"] == 5
+    assert "summary" in result
+    assert "Week 5 Summary" in result["summary"]
+    assert "Team A vs Team B" in result["summary"]
+    # Check for values with how Python formats them
+    assert "125.5" in result["summary"]
+    assert "118.25" in result["summary"]
+    assert "135.75" in result["summary"]
+    assert "130" in result["summary"]  # 130.0 is formatted as 130
+
+
+def test_generate_batch_score_summary_multiple_matchups():
+    """Verify that generate_batch_score_summary handles multiple matchups."""
+    mock_league = MagicMock()
+    mock_league.current_week = 3
+
+    # Create two matchups
+    matchup_data = [
+        {
+            "home": "Team A",
+            "away": "Team B",
+            "h_score": 100.0,
+            "a_score": 95.5,
+            "h_proj": 110.0,
+            "a_proj": 105.0,
+        },
+        {
+            "home": "Team C",
+            "away": "Team D",
+            "h_score": 120.0,
+            "a_score": 115.5,
+            "h_proj": 130.0,
+            "a_proj": 125.0,
+        },
+    ]
+
+    box_scores = []
+    for data in matchup_data:
+        mock_home_team = MagicMock()
+        mock_home_team.team_name = data["home"]
+        mock_away_team = MagicMock()
+        mock_away_team.team_name = data["away"]
+
+        mock_box_score = MagicMock()
+        mock_box_score.home_team = mock_home_team
+        mock_box_score.away_team = mock_away_team
+        mock_box_score.home_score = data["h_score"]
+        mock_box_score.away_score = data["a_score"]
+        mock_box_score.home_projected = data["h_proj"]
+        mock_box_score.away_projected = data["a_proj"]
+
+        box_scores.append(mock_box_score)
+
+    mock_league.box_scores.return_value = box_scores
+
+    result = generate_batch_score_summary(mock_league)
+
+    assert result["success"] is True
+    assert result["week"] == 3
+    assert "Matchup 1:" in result["summary"]
+    assert "Matchup 2:" in result["summary"]
+    assert "Team A vs Team B" in result["summary"]
+    assert "Team C vs Team D" in result["summary"]
+    assert "100.0" in result["summary"]
+    assert "120.0" in result["summary"]
+
+
+def test_generate_batch_score_summary_no_matchups():
+    """Verify that generate_batch_score_summary handles no matchups."""
+    mock_league = MagicMock()
+    mock_league.current_week = 10
+    mock_league.box_scores.return_value = []
+
+    result = generate_batch_score_summary(mock_league)
+
+    assert result["success"] is True
+    assert result["week"] == 10
+    assert "No matchups found for this week." in result["summary"]
+
+
+def test_generate_batch_score_summary_propagates_error():
+    """Verify that generate_batch_score_summary propagates errors from matchups."""
+    mock_league = MagicMock()
+    # This will cause get_current_matchups to fail
+    mock_league.current_week = None
+
+    result = generate_batch_score_summary(mock_league)
+
+    assert result["success"] is False
+    assert "error" in result
+
+
+def test_generate_batch_score_summary_format_structure():
+    """Verify that generate_batch_score_summary output has correct structure."""
+    mock_league = MagicMock()
+    mock_league.current_week = 7
+
+    mock_home_team = MagicMock()
+    mock_home_team.team_name = "Home Squad"
+
+    mock_away_team = MagicMock()
+    mock_away_team.team_name = "Away Squad"
+
+    mock_box_score = MagicMock()
+    mock_box_score.home_team = mock_home_team
+    mock_box_score.away_team = mock_away_team
+    mock_box_score.home_score = 99.99
+    mock_box_score.away_score = 88.88
+    mock_box_score.home_projected = 105.50
+    mock_box_score.away_projected = 95.75
+
+    mock_league.box_scores.return_value = [mock_box_score]
+
+    result = generate_batch_score_summary(mock_league)
+
+    summary = result["summary"]
+    # Verify structure has matchup header and team lines with scores
+    lines = summary.split("\n")
+    assert lines[0].strip() == "Week 7 Summary"
+    assert "Home Squad vs Away Squad" in summary
+    # Check for values as Python formats them
+    assert "Home Squad: 99.99 (Projected: 105.5)" in summary
+    assert "Away Squad: 88.88 (Projected: 95.75)" in summary
 
 
 def test_get_team_roster_with_none_league():

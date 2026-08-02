@@ -545,7 +545,7 @@ When you are awakened by a cron-scheduled broadcast event, you are being called 
 
 **Example Output Style:**
 
-```
+```text
 🏈 IT'S GAME TIME! 🏈
 
 Here's this week's scoreboard breakdown:

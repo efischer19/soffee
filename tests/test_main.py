@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from main import (
+    _format_roster_sweep_message,
     detect_roster_violations,
     generate_batch_score_summary,
     get_current_matchups,
@@ -18,6 +19,7 @@ from main import (
     get_top_free_agent_replacements,
     initialize_league,
     process_waiver_transaction,
+    run_sunday_roster_sweep,
     set_lineup_status,
 )
 
@@ -2614,3 +2616,324 @@ class TestGetTopFreeAgentReplacements:
         # Test week 6
         result_week6 = get_top_free_agent_replacements(mock_league, "QB", week=6)
         assert result_week6["players"][0]["projected_points"] == 25.0
+
+
+class TestRunSundayRosterSweep:
+    """Test suite for run_sunday_roster_sweep function."""
+
+    def test_run_sunday_roster_sweep_none_league(self):
+        """Verify that function handles None league gracefully."""
+        result = run_sunday_roster_sweep(None, week=5)
+
+        assert result["success"] is False
+        assert "League is None" in result["error"]
+
+    def test_run_sunday_roster_sweep_invalid_week_negative(self):
+        """Verify that function rejects negative week numbers."""
+        mock_league = MagicMock()
+
+        result = run_sunday_roster_sweep(mock_league, week=-1)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_run_sunday_roster_sweep_invalid_week_zero(self):
+        """Verify that function rejects week 0."""
+        mock_league = MagicMock()
+
+        result = run_sunday_roster_sweep(mock_league, week=0)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_run_sunday_roster_sweep_invalid_week_too_high(self):
+        """Verify that function rejects week > 17."""
+        mock_league = MagicMock()
+
+        result = run_sunday_roster_sweep(mock_league, week=18)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_run_sunday_roster_sweep_invalid_week_not_int(self):
+        """Verify that function rejects non-integer week values."""
+        mock_league = MagicMock()
+
+        result = run_sunday_roster_sweep(mock_league, week="5")
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_run_sunday_roster_sweep_no_violations(self):
+        """Verify that function returns 0 violations when none exist."""
+        mock_league = MagicMock()
+
+        with patch("main.detect_roster_violations") as mock_detect:
+            mock_detect.return_value = {
+                "success": True,
+                "week": 5,
+                "violations": {},
+            }
+
+            result = run_sunday_roster_sweep(mock_league, week=5)
+
+            assert result["success"] is True
+            assert result["violations_found"] == 0
+            assert result["messages_posted"] == 0
+
+    def test_run_sunday_roster_sweep_detect_violations_fails(self):
+        """Verify that function returns error when detect_roster_violations fails."""
+        mock_league = MagicMock()
+
+        with patch("main.detect_roster_violations") as mock_detect:
+            mock_detect.return_value = {
+                "success": False,
+                "error": "Failed to detect violations",
+            }
+
+            result = run_sunday_roster_sweep(mock_league, week=5)
+
+            assert result["success"] is False
+            assert "Failed to detect violations" in result["error"]
+
+    def test_run_sunday_roster_sweep_with_violations_no_slack_mapping(self):
+        """Verify that function skips teams without Slack mapping."""
+        mock_league = MagicMock()
+
+        with patch("main.detect_roster_violations") as mock_detect:
+            mock_detect.return_value = {
+                "success": True,
+                "week": 5,
+                "violations": {
+                    1: [
+                        {
+                            "name": "Player Name",
+                            "position": "QB",
+                            "violation_reason": "bye",
+                        }
+                    ]
+                },
+            }
+
+            with patch("authorization.get_slack_user_for_team") as mock_get_slack:
+                mock_get_slack.return_value = None  # No mapping
+
+                result = run_sunday_roster_sweep(mock_league, week=5)
+
+                assert result["success"] is True
+                assert result["violations_found"] == 1
+                assert result["messages_posted"] == 0
+
+    def test_run_sunday_roster_sweep_with_violations_and_slack_mapping(self):
+        """Verify that function finds and processes violations with Slack mapping."""
+        mock_league = MagicMock()
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_league.teams = [mock_team]
+
+        with patch("main.detect_roster_violations") as mock_detect:
+            mock_detect.return_value = {
+                "success": True,
+                "week": 5,
+                "violations": {
+                    1: [
+                        {
+                            "name": "Player Name",
+                            "position": "QB",
+                            "violation_reason": "bye",
+                        }
+                    ]
+                },
+            }
+
+            with patch("authorization.get_slack_user_for_team") as mock_get_slack:
+                mock_get_slack.return_value = "U1234567890"
+
+                with patch("main.get_top_free_agent_replacements") as mock_get_fa:
+                    mock_get_fa.return_value = {
+                        "success": True,
+                        "position": "QB",
+                        "players": [
+                            {
+                                "name": "Patrick Mahomes",
+                                "position": "QB",
+                                "pro_team": "KC",
+                                "projected_points": 28.5,
+                                "percent_owned": 95.0,
+                            }
+                        ],
+                    }
+
+                    with patch("main._format_roster_sweep_message") as mock_format:
+                        mock_format.return_value = "Test message"
+
+                        with patch("requests.post") as mock_post:
+                            mock_post.return_value = MagicMock(status_code=200)
+
+                            result = run_sunday_roster_sweep(mock_league, week=5)
+
+                            assert result["success"] is True
+                            assert result["violations_found"] == 1
+
+    def test_run_sunday_roster_sweep_multiple_violations_same_team(self):
+        """Verify that function handles multiple violations from same team."""
+        mock_league = MagicMock()
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_league.teams = [mock_team]
+
+        with patch("main.detect_roster_violations") as mock_detect:
+            mock_detect.return_value = {
+                "success": True,
+                "week": 5,
+                "violations": {
+                    1: [
+                        {
+                            "name": "QB Player",
+                            "position": "QB",
+                            "violation_reason": "bye",
+                        },
+                        {
+                            "name": "RB Player",
+                            "position": "RB",
+                            "violation_reason": "Out",
+                        },
+                    ]
+                },
+            }
+
+            with patch("authorization.get_slack_user_for_team") as mock_get_slack:
+                mock_get_slack.return_value = "U1234567890"
+
+                with patch("main.get_top_free_agent_replacements") as mock_get_fa:
+                    mock_get_fa.return_value = {
+                        "success": True,
+                        "players": [
+                            {
+                                "name": "Player",
+                                "position": "?",
+                                "pro_team": "?",
+                                "projected_points": 15.0,
+                                "percent_owned": 50.0,
+                            }
+                        ],
+                    }
+
+                    with patch("main._format_roster_sweep_message") as mock_format:
+                        mock_format.return_value = "Test message"
+
+                        with patch("requests.post") as mock_post:
+                            mock_post.return_value = MagicMock(status_code=200)
+
+                            result = run_sunday_roster_sweep(mock_league, week=5)
+
+                            assert result["success"] is True
+                            assert result["violations_found"] == 1
+
+
+class TestFormatRosterSweepMessage:
+    """Test suite for _format_roster_sweep_message function."""
+
+    def test_format_roster_sweep_message_basic(self):
+        """Verify that function formats a basic violation message."""
+        message = _format_roster_sweep_message(
+            slack_user_id="U1234567890",
+            team_name="Test Team",
+            violations=[
+                {
+                    "name": "Player Name",
+                    "position": "QB",
+                    "violation_reason": "bye",
+                }
+            ],
+            suggestions={},
+        )
+
+        assert "<@U1234567890>" in message
+        assert "Test Team" in message
+        assert "Player Name" in message
+        assert "QB" in message
+        assert "bye week" in message
+
+    def test_format_roster_sweep_message_with_suggestions(self):
+        """Verify that function includes free agent suggestions."""
+        message = _format_roster_sweep_message(
+            slack_user_id="U1234567890",
+            team_name="Test Team",
+            violations=[
+                {
+                    "name": "Injured Player",
+                    "position": "RB",
+                    "violation_reason": "Out",
+                }
+            ],
+            suggestions={
+                "RB": [
+                    {
+                        "name": "Replacement RB",
+                        "position": "RB",
+                        "pro_team": "KC",
+                        "projected_points": 18.5,
+                        "percent_owned": 60.0,
+                    }
+                ]
+            },
+        )
+
+        assert "Replacement RB" in message
+        assert "18.5" in message
+        assert "KC" in message
+
+    def test_format_roster_sweep_message_multiple_violations(self):
+        """Verify that function handles multiple violations."""
+        message = _format_roster_sweep_message(
+            slack_user_id="U1234567890",
+            team_name="Test Team",
+            violations=[
+                {
+                    "name": "QB Player",
+                    "position": "QB",
+                    "violation_reason": "bye",
+                },
+                {
+                    "name": "RB Player",
+                    "position": "RB",
+                    "violation_reason": "Out",
+                },
+            ],
+            suggestions={},
+        )
+
+        assert "QB Player" in message
+        assert "RB Player" in message
+        assert message.count("❌") == 2
+
+    def test_format_roster_sweep_message_injury_status(self):
+        """Verify that function formats injury status correctly."""
+        message = _format_roster_sweep_message(
+            slack_user_id="U1234567890",
+            team_name="Test Team",
+            violations=[
+                {
+                    "name": "Hurt Player",
+                    "position": "WR",
+                    "violation_reason": "Questionable",
+                }
+            ],
+            suggestions={},
+        )
+
+        assert "questionable status" in message.lower()
+
+    def test_format_roster_sweep_message_includes_call_to_action(self):
+        """Verify that function includes engagement call-to-action."""
+        message = _format_roster_sweep_message(
+            slack_user_id="U1234567890",
+            team_name="Test Team",
+            violations=[],
+            suggestions={},
+        )
+
+        assert "👍" in message or "react" in message.lower()

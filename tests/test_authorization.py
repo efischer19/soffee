@@ -7,7 +7,11 @@ from unittest.mock import patch
 # Add the root directory to the path so we can import authorization
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from authorization import SLACK_USER_TO_TEAM_MAPPING, verify_team_ownership
+from authorization import (
+    SLACK_USER_TO_TEAM_MAPPING,
+    get_slack_user_for_team,
+    verify_team_ownership,
+)
 
 
 class TestVerifyTeamOwnership:
@@ -110,3 +114,66 @@ class TestSlackUserToTeamMapping:
         assert SLACK_USER_TO_TEAM_MAPPING == {} or isinstance(
             SLACK_USER_TO_TEAM_MAPPING, dict
         )
+
+
+class TestGetSlackUserForTeam:
+    """Test suite for get_slack_user_for_team function."""
+
+    def test_get_slack_user_for_team_success(self):
+        """Verify that function returns correct Slack user for team."""
+        mock_mapping = {
+            "U1234567890": 1,
+            "U0987654321": 2,
+        }
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", mock_mapping):
+            assert get_slack_user_for_team(1) == "U1234567890"
+            assert get_slack_user_for_team(2) == "U0987654321"
+
+    def test_get_slack_user_for_team_not_found(self):
+        """Verify that function returns None when team not mapped."""
+        mock_mapping = {
+            "U1234567890": 1,
+        }
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", mock_mapping):
+            assert get_slack_user_for_team(999) is None
+
+    def test_get_slack_user_for_team_empty_mapping(self):
+        """Verify that function returns None with empty mapping."""
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", {}, clear=True):
+            assert get_slack_user_for_team(1) is None
+
+    def test_get_slack_user_for_team_invalid_team_id_negative(self):
+        """Verify that function returns None for negative team ID."""
+        mock_mapping = {
+            "U1234567890": 1,
+        }
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", mock_mapping):
+            assert get_slack_user_for_team(-1) is None
+
+    def test_get_slack_user_for_team_invalid_team_id_zero(self):
+        """Verify that function returns None for zero team ID."""
+        mock_mapping = {
+            "U1234567890": 1,
+        }
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", mock_mapping):
+            assert get_slack_user_for_team(0) is None
+
+    def test_get_slack_user_for_team_invalid_team_id_not_int(self):
+        """Verify that function returns None for non-integer team ID."""
+        assert get_slack_user_for_team("1") is None
+        assert get_slack_user_for_team(1.5) is None
+        assert get_slack_user_for_team(None) is None
+        assert get_slack_user_for_team([]) is None
+
+    def test_get_slack_user_for_team_multiple_users(self):
+        """Verify that function correctly identifies each user's team."""
+        mock_mapping = {
+            "U1111111111": 1,
+            "U2222222222": 2,
+            "U3333333333": 3,
+        }
+        with patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", mock_mapping):
+            assert get_slack_user_for_team(1) == "U1111111111"
+            assert get_slack_user_for_team(2) == "U2222222222"
+            assert get_slack_user_for_team(3) == "U3333333333"
+            assert get_slack_user_for_team(4) is None

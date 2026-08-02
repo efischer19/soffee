@@ -10,6 +10,9 @@ metadata:
   openclaw:
     emoji: "🏈"
     schedules:
+      - name: sunday_10am_est_roster_sweep
+        description: Sunday morning automated roster violation sweep
+        cron: "0 15 * * 0"
       - name: sunday_12pm_est
         description: Early Sunday NFL window broadcast
         cron: "0 17 * * 0"

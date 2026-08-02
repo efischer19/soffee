@@ -910,6 +910,121 @@ def process_waiver_transaction(
         }
 
 
+def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]:
+    """
+    Detect starting roster violations for a given week.
+
+    This function sweeps all team rosters for a specific week and identifies any
+    starting players who are either on a bye week or officially marked as "OUT"
+    or "IR" due to injury. Only active starting lineup slots are checked; bench
+    and IR slots are ignored.
+
+    Args:
+        league: An initialized ESPN League object. If None, returns error response.
+        week: The fantasy week number to check (1-17 for regular season).
+
+    Returns:
+        dict: A formatted response containing:
+            - success (bool): Whether the operation succeeded
+            - week (int): The week that was checked
+            - violations (dict): Dictionary mapping team_id to list of violating
+              players. Each player violation contains:
+                - name (str): Player's full name
+                - position (str): Player's position (e.g., "QB", "RB", "WR")
+                - violation_reason (str): Reason for violation ("bye" or injury
+                  status string like "Out", "Questionable", etc.)
+            - error (str): Error message if operation failed
+
+    Example:
+        >>> league = initialize_league()
+        >>> result = detect_roster_violations(league, 5)
+        >>> if result['success']:
+        ...     for team_id, players in result['violations'].items():
+        ...         print(f"Team {team_id}: {len(players)} violations")
+
+    Raises:
+        No exceptions are raised. All errors are caught and returned in the
+        response dictionary with success=False and an error message.
+    """
+    if league is None:
+        return {
+            "success": False,
+            "error": "League is None. Cannot detect roster violations.",
+        }
+
+    if not isinstance(week, int) or week < 1 or week > 17:
+        return {
+            "success": False,
+            "error": "Invalid week: must be an integer between 1 and 17.",
+        }
+
+    try:
+        # Load the roster for the specific week
+        league.load_roster_week(week)
+
+        violations = {}
+
+        # Iterate through all teams
+        for team in league.teams:
+            team_violations = []
+
+            # Check each player in the team's roster
+            for player in team.roster:
+                # Skip bench and IR slots - only check starting positions
+                if player.lineupSlot in ("BE", "IR", ""):
+                    continue
+
+                # Check if player is on bye week
+                if player.active_status == "bye":
+                    team_violations.append(
+                        {
+                            "name": player.name,
+                            "position": player.position,
+                            "violation_reason": "bye",
+                        }
+                    )
+                    continue
+
+                # Check if player has OUT or IR injury status
+                if player.injuryStatus and player.injuryStatus.upper() in (
+                    "OUT",
+                    "IR",
+                ):
+                    team_violations.append(
+                        {
+                            "name": player.name,
+                            "position": player.position,
+                            "violation_reason": player.injuryStatus,
+                        }
+                    )
+
+            # Only add to violations if there are any for this team
+            if team_violations:
+                violations[team.team_id] = team_violations
+
+        return {
+            "success": True,
+            "week": week,
+            "violations": violations,
+        }
+
+    except AttributeError as e:
+        return {
+            "success": False,
+            "error": f"Invalid league data structure: {e}",
+        }
+    except (ConnectionError, TimeoutError) as e:
+        return {
+            "success": False,
+            "error": f"API connection error: {e}",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error detecting roster violations: {e}",
+        }
+
+
 def main():
     """
     Main entry point for the SOFFEE OpenClaw skill.

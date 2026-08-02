@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from main import (
+    detect_roster_violations,
     generate_batch_score_summary,
     get_current_matchups,
     get_team_roster,
@@ -1850,3 +1851,429 @@ class TestProcessWaiverTransactionAuthorization:
         # Should pass authorization and attempt the transaction
         # (may fail on other validations, but not on authorization)
         assert result["success"] is True or result["error"] != "Unauthorized"
+
+
+# Tests for detect_roster_violations
+class TestDetectRosterViolations:
+    """Test suite for detect_roster_violations function."""
+
+    def test_detect_roster_violations_with_none_league(self):
+        """Verify that detect_roster_violations returns error when league is None."""
+        result = detect_roster_violations(None, 5)
+
+        assert result["success"] is False
+        assert "League is None" in result["error"]
+
+    def test_detect_roster_violations_invalid_week_negative(self):
+        """Verify that detect_roster_violations rejects negative week numbers."""
+        mock_league = MagicMock()
+
+        result = detect_roster_violations(mock_league, -1)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_detect_roster_violations_invalid_week_zero(self):
+        """Verify that detect_roster_violations rejects week 0."""
+        mock_league = MagicMock()
+
+        result = detect_roster_violations(mock_league, 0)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_detect_roster_violations_invalid_week_too_high(self):
+        """Verify that detect_roster_violations rejects week > 17."""
+        mock_league = MagicMock()
+
+        result = detect_roster_violations(mock_league, 18)
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_detect_roster_violations_invalid_week_not_integer(self):
+        """Verify that detect_roster_violations rejects non-integer week."""
+        mock_league = MagicMock()
+
+        result = detect_roster_violations(mock_league, "5")
+
+        assert result["success"] is False
+        assert "Invalid week" in result["error"]
+
+    def test_detect_roster_violations_no_violations(self):
+        """Verify detect_roster_violations returns empty dict when no violations."""
+        # Create mock player with no violations
+        mock_player = MagicMock()
+        mock_player.name = "Patrick Mahomes"
+        mock_player.position = "QB"
+        mock_player.lineupSlot = "QB"
+        mock_player.active_status = "active"
+        mock_player.injuryStatus = None
+
+        # Create mock team with no violations
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert result["week"] == 5
+        assert result["violations"] == {}
+        mock_league.load_roster_week.assert_called_once_with(5)
+
+    def test_detect_roster_violations_bye_week_violation(self):
+        """Verify that detect_roster_violations detects bye week violations."""
+        # Create mock player on bye week
+        mock_player = MagicMock()
+        mock_player.name = "Travis Kelce"
+        mock_player.position = "TE"
+        mock_player.lineupSlot = "TE"
+        mock_player.active_status = "bye"
+        mock_player.injuryStatus = None
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert result["week"] == 5
+        assert 1 in result["violations"]
+        assert len(result["violations"][1]) == 1
+        assert result["violations"][1][0]["name"] == "Travis Kelce"
+        assert result["violations"][1][0]["position"] == "TE"
+        assert result["violations"][1][0]["violation_reason"] == "bye"
+
+    def test_detect_roster_violations_out_status_violation(self):
+        """Verify that detect_roster_violations detects OUT injury status."""
+        # Create mock player with OUT status
+        mock_player = MagicMock()
+        mock_player.name = "Saquon Barkley"
+        mock_player.position = "RB"
+        mock_player.lineupSlot = "RB"
+        mock_player.active_status = "active"
+        mock_player.injuryStatus = "Out"
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 2
+        mock_team.team_name = "Test Team 2"
+        mock_team.roster = [mock_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert result["week"] == 5
+        assert 2 in result["violations"]
+        assert len(result["violations"][2]) == 1
+        assert result["violations"][2][0]["name"] == "Saquon Barkley"
+        assert result["violations"][2][0]["position"] == "RB"
+        assert result["violations"][2][0]["violation_reason"] == "Out"
+
+    def test_detect_roster_violations_ir_status_violation(self):
+        """Verify that detect_roster_violations detects IR injury status."""
+        # Create mock player with IR status
+        mock_player = MagicMock()
+        mock_player.name = "Josh Jacobs"
+        mock_player.position = "RB"
+        mock_player.lineupSlot = "RB/WR"
+        mock_player.active_status = "active"
+        mock_player.injuryStatus = "IR"
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 3
+        mock_team.team_name = "Test Team 3"
+        mock_team.roster = [mock_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert result["week"] == 5
+        assert 3 in result["violations"]
+        assert len(result["violations"][3]) == 1
+        assert result["violations"][3][0]["violation_reason"] == "IR"
+
+    def test_detect_roster_violations_ignores_bench_players(self):
+        """Verify that detect_roster_violations ignores bench slot players."""
+        # Create mock bench player with violation
+        mock_bench_player = MagicMock()
+        mock_bench_player.name = "Bench Player"
+        mock_bench_player.position = "QB"
+        mock_bench_player.lineupSlot = "BE"
+        mock_bench_player.active_status = "bye"
+        mock_bench_player.injuryStatus = None
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_bench_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        # Bench player should be ignored, so no violations
+        assert result["violations"] == {}
+
+    def test_detect_roster_violations_ignores_ir_slot_players(self):
+        """Verify that detect_roster_violations ignores IR slot players."""
+        # Create mock IR slot player (already in IR spot)
+        mock_ir_player = MagicMock()
+        mock_ir_player.name = "IR Player"
+        mock_ir_player.position = "RB"
+        mock_ir_player.lineupSlot = "IR"
+        mock_ir_player.active_status = "active"
+        mock_ir_player.injuryStatus = "Out"
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_ir_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        # IR slot player should be ignored
+        assert result["violations"] == {}
+
+    def test_detect_roster_violations_multiple_violations_single_team(self):
+        """Verify detect_roster_violations reports multiple violations per team."""
+        # Create multiple violating players
+        mock_player1 = MagicMock()
+        mock_player1.name = "Player One"
+        mock_player1.position = "QB"
+        mock_player1.lineupSlot = "QB"
+        mock_player1.active_status = "bye"
+        mock_player1.injuryStatus = None
+
+        mock_player2 = MagicMock()
+        mock_player2.name = "Player Two"
+        mock_player2.position = "WR"
+        mock_player2.lineupSlot = "WR"
+        mock_player2.active_status = "active"
+        mock_player2.injuryStatus = "Out"
+
+        mock_player3 = MagicMock()
+        mock_player3.name = "Player Three"
+        mock_player3.position = "RB"
+        mock_player3.lineupSlot = "RB"
+        mock_player3.active_status = "active"
+        mock_player3.injuryStatus = None
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_player1, mock_player2, mock_player3]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert result["week"] == 5
+        assert 1 in result["violations"]
+        assert len(result["violations"][1]) == 2
+        violation_names = [v["name"] for v in result["violations"][1]]
+        assert "Player One" in violation_names
+        assert "Player Two" in violation_names
+        assert "Player Three" not in violation_names
+
+    def test_detect_roster_violations_multiple_teams(self):
+        """Verify detect_roster_violations reports violations across teams."""
+        # Create violating player for team 1
+        mock_player1 = MagicMock()
+        mock_player1.name = "Team1 Violator"
+        mock_player1.position = "QB"
+        mock_player1.lineupSlot = "QB"
+        mock_player1.active_status = "bye"
+        mock_player1.injuryStatus = None
+
+        # Create violating player for team 2
+        mock_player2 = MagicMock()
+        mock_player2.name = "Team2 Violator"
+        mock_player2.position = "RB"
+        mock_player2.lineupSlot = "RB"
+        mock_player2.active_status = "active"
+        mock_player2.injuryStatus = "Out"
+
+        # Create mock teams
+        mock_team1 = MagicMock()
+        mock_team1.team_id = 1
+        mock_team1.team_name = "Team 1"
+        mock_team1.roster = [mock_player1]
+
+        mock_team2 = MagicMock()
+        mock_team2.team_id = 2
+        mock_team2.team_name = "Team 2"
+        mock_team2.roster = [mock_player2]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team1, mock_team2]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert len(result["violations"]) == 2
+        assert 1 in result["violations"]
+        assert 2 in result["violations"]
+        assert result["violations"][1][0]["name"] == "Team1 Violator"
+        assert result["violations"][2][0]["name"] == "Team2 Violator"
+
+    def test_detect_roster_violations_connection_error(self):
+        """Verify that detect_roster_violations handles connection errors."""
+        mock_league = MagicMock()
+        mock_league.load_roster_week = MagicMock(
+            side_effect=ConnectionError("API Down")
+        )
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is False
+        assert "API connection error" in result["error"]
+
+    def test_detect_roster_violations_timeout_error(self):
+        """Verify that detect_roster_violations handles timeout errors."""
+        mock_league = MagicMock()
+        mock_league.load_roster_week = MagicMock(side_effect=TimeoutError("Timeout"))
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is False
+        assert "API connection error" in result["error"]
+
+    def test_detect_roster_violations_attribute_error(self):
+        """Verify that detect_roster_violations handles invalid league data."""
+        mock_league = MagicMock()
+        mock_league.load_roster_week = MagicMock(
+            side_effect=AttributeError("Missing attribute")
+        )
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is False
+        assert "Invalid league data structure" in result["error"]
+
+    def test_detect_roster_violations_unexpected_error(self):
+        """Verify that detect_roster_violations handles unexpected errors."""
+        mock_league = MagicMock()
+        mock_league.load_roster_week = MagicMock(side_effect=RuntimeError("Unexpected"))
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is False
+        assert "Unexpected error" in result["error"]
+        assert "detecting roster violations" in result["error"]
+
+    def test_detect_roster_violations_case_insensitive_injury_status(self):
+        """Verify that injury status checks are case-insensitive."""
+        # Create mock players with different case variations
+        mock_player1 = MagicMock()
+        mock_player1.name = "Player with OUT"
+        mock_player1.position = "QB"
+        mock_player1.lineupSlot = "QB"
+        mock_player1.active_status = "active"
+        mock_player1.injuryStatus = "OUT"
+
+        mock_player2 = MagicMock()
+        mock_player2.name = "Player with out"
+        mock_player2.position = "RB"
+        mock_player2.lineupSlot = "RB"
+        mock_player2.active_status = "active"
+        mock_player2.injuryStatus = "out"
+
+        mock_player3 = MagicMock()
+        mock_player3.name = "Player with Ir"
+        mock_player3.position = "WR"
+        mock_player3.lineupSlot = "WR"
+        mock_player3.active_status = "active"
+        mock_player3.injuryStatus = "Ir"
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_player1, mock_player2, mock_player3]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        assert len(result["violations"][1]) == 3
+        violation_names = [v["name"] for v in result["violations"][1]]
+        assert "Player with OUT" in violation_names
+        assert "Player with out" in violation_names
+        assert "Player with Ir" in violation_names
+
+    def test_detect_roster_violations_empty_lineup_slot(self):
+        """Verify that players with empty lineupSlot are ignored."""
+        # Create player with empty lineup slot
+        mock_player = MagicMock()
+        mock_player.name = "Empty Slot Player"
+        mock_player.position = "QB"
+        mock_player.lineupSlot = ""
+        mock_player.active_status = "bye"
+        mock_player.injuryStatus = None
+
+        # Create mock team
+        mock_team = MagicMock()
+        mock_team.team_id = 1
+        mock_team.team_name = "Test Team"
+        mock_team.roster = [mock_player]
+
+        # Create mock league
+        mock_league = MagicMock()
+        mock_league.teams = [mock_team]
+        mock_league.load_roster_week = MagicMock()
+
+        result = detect_roster_violations(mock_league, 5)
+
+        assert result["success"] is True
+        # Empty slot player should be ignored
+        assert result["violations"] == {}

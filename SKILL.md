@@ -9,6 +9,19 @@ compatibility: Requires OpenClaw framework and Slack Socket Mode integration
 metadata:
   openclaw:
     emoji: "🏈"
+    schedules:
+      - name: sunday_12pm_est
+        description: Early Sunday NFL window broadcast
+        cron: "0 17 * * 0"
+      - name: sunday_430pm_est
+        description: Mid-afternoon Sunday NFL window broadcast
+        cron: "30 21 * * 0"
+      - name: sunday_8pm_est
+        description: Sunday night football broadcast
+        cron: "0 1 * * 1"
+      - name: monday_tuesday_7am_est
+        description: Monday/Tuesday morning post-game briefing
+        cron: "0 12 * * 2,3"
 ---
 
 # SOFFEE - OpenClaw Fantasy Football Skill
@@ -97,6 +110,64 @@ The following OAuth scopes must be granted to the Slack App for Sofie to functio
   - `app_mention` — Respond when mentioned
   - `message.channels` — Receive channel messages
   - `message.im` — Receive direct messages
+
+### Automated Broadcast Configuration
+
+Sofie can be configured to automatically broadcast NFL window summaries and post-game briefings at scheduled times. These automated broadcasts help keep your league engaged with timely updates without requiring manual triggers.
+
+#### Broadcast Schedule
+
+Sofie is configured with four default broadcast times aligned with standard NFL windows:
+
+- **Sunday 12 PM EST** — Early Sunday games
+- **Sunday 4:30 PM EST** — Mid-afternoon slate
+- **Sunday 8 PM EST** — Sunday night football
+- **Monday/Tuesday 7 AM EST** — Post-game morning briefing
+
+#### Environment Variables
+
+Configure the broadcast channel and cron schedules using these environment variables:
+
+- **`SOFFEE_BROADCAST_CHANNEL`** — Slack channel for automated broadcasts
+  - Format: Channel name (e.g., `#nfl-updates`) or channel ID (e.g., `C1234567890`)
+  - Default: `#nfl-updates`
+
+- **`SOFFEE_CRON_SUNDAY_12PM`** — Cron pattern for Sunday 12 PM EST
+  - Default: `0 17 * * 0` (17:00 UTC)
+  - Example: `0 12 * * 0` for 12:00 UTC
+
+- **`SOFFEE_CRON_SUNDAY_430PM`** — Cron pattern for Sunday 4:30 PM EST
+  - Default: `30 21 * * 0` (21:30 UTC)
+  - Example: `30 16 * * 0` for 16:30 UTC
+
+- **`SOFFEE_CRON_SUNDAY_8PM`** — Cron pattern for Sunday 8 PM EST
+  - Default: `0 1 * * 1` (01:00 UTC Monday)
+  - Example: `0 20 * * 0` for 20:00 UTC Sunday
+
+- **`SOFFEE_CRON_MONDAY_TUESDAY_7AM`** — Cron pattern for Monday/Tuesday 7 AM EST
+  - Default: `0 12 * * 2,3` (12:00 UTC Tue/Wed)
+  - Example: `0 7 * * 1,2` for 07:00 UTC Mon/Tue
+
+#### Cron Syntax
+
+Cron patterns use standard Unix cron format with five space-separated fields:
+
+```bash
+minute hour day-of-month month day-of-week
+```
+
+- **minute**: 0-59
+- **hour**: 0-23 (UTC)
+- **day-of-month**: 1-31
+- **month**: 1-12
+- **day-of-week**: 0-6 (0 = Sunday)
+
+Special characters:
+
+- `*` — Match any value
+- `,` — Match multiple values (e.g., `1,2,3`)
+- `-` — Match a range (e.g., `1-5`)
+- `/` — Step values (e.g., `*/15` for every 15 minutes)
 
 ## Usage
 

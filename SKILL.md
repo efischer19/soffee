@@ -152,7 +152,7 @@ Configure the broadcast channel and cron schedules using these environment varia
 
 Cron patterns use standard Unix cron format with five space-separated fields:
 
-```
+```bash
 minute hour day-of-month month day-of-week
 ```
 
@@ -163,6 +163,7 @@ minute hour day-of-month month day-of-week
 - **day-of-week**: 0-6 (0 = Sunday)
 
 Special characters:
+
 - `*` — Match any value
 - `,` — Match multiple values (e.g., `1,2,3`)
 - `-` — Match a range (e.g., `1-5`)

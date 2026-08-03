@@ -42,6 +42,7 @@ all Python applications in production.
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 
 # Good — structured context

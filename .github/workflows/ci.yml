@@ -103,17 +103,13 @@ jobs:
       fail-fast: false
       matrix:
         project:
-          - apps/example-app
-          - libs/example-lib
+          - .
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Set up Python and uv
         uses: ./.github/actions/setup-python-uv
-        # We removed the 'working-directory' input here!
-        # This forces the action to run `uv sync --frozen` at the repo root
-        # so it can locate the single workspace uv.lock file.
 
       - name: Ruff format check
         working-directory: ${{ matrix.project }}

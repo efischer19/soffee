@@ -40,7 +40,7 @@ class ScheduleConfig:
         SOFFEE_CRON_SUNDAY_8PM: Cron pattern for Sunday 8 PM EST
             (default: "0 20 * * 0")
         SOFFEE_CRON_MONDAY_TUESDAY_7AM: Cron pattern for Monday/Tuesday 7 AM EST
-            (default: "0 7 * * 1,2")
+            (default: "0 12 * * 1,2")
     """
 
     # Default cron patterns (in UTC, accounting for EST = UTC-5)
@@ -48,7 +48,7 @@ class ScheduleConfig:
     DEFAULT_CRON_SUNDAY_12PM = "0 17 * * 0"  # Sunday 12 PM EST = 17:00 UTC
     DEFAULT_CRON_SUNDAY_430PM = "30 21 * * 0"  # Sunday 4:30 PM EST = 21:30 UTC
     DEFAULT_CRON_SUNDAY_8PM = "0 1 * * 1"  # Sunday 8 PM EST = 1:00 AM Monday UTC
-    DEFAULT_CRON_MONDAY_TUESDAY_7AM = "0 12 * * 2,3"  # Mon/Tue 7 AM EST = 12:00 UTC
+    DEFAULT_CRON_MONDAY_TUESDAY_7AM = "0 12 * * 1,2"  # Mon/Tue 7 AM EST = 12:00 UTC
 
     DEFAULT_BROADCAST_CHANNEL = "#nfl-updates"
 

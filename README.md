@@ -35,7 +35,7 @@ Because there is no official, public ESPN Fantasy API, Sofie authenticates by pi
 
 1. **You must provide your cookies:** To run Sofie, the Commissioner must extract their `SWID` and `espn_s2` cookies from their browser and place them in the `.env` file.
 2. **Never share your `.env`:** These cookies provide access to your *entire* ESPN account. **DO NOT commit them to GitHub.** If you are not the one hosting the OpenClaw server, you must implicitly trust the person who is.
-3. **The Slack ID Mapping is your firewall:** Because Sofie has the power to drop *any* player in the league, the `slack_to_espn_map.json` file is your only line of defense. Sofie cross-references the Slack User ID of the person issuing a command against this file before executing a move. You must configure this file accurately to prevent managers from modifying other people's rosters.
+3. **The Slack ID Mapping is your firewall:** Because Sofie has the power to drop *any* player in the league, `SOFFEE_SLACK_USER_TO_TEAM_MAP` is your only line of defense. Sofie cross-references the Slack User ID of the person issuing a command against this mapping before executing a move. You must configure this mapping accurately to prevent managers from modifying other people's rosters.
 
 ### Finding your ESPN Cookies
 
@@ -112,7 +112,20 @@ Once your Slack App is configured, set the following environment variables:
 ```bash
 SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX    # Socket Mode App Token
 SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX      # Bot User OAuth Token
+ESPN_SWID={YOUR-ESPN-SWID}                # ESPN SWID cookie value
+ESPN_S2=YOUR_ESPN_S2_COOKIE               # ESPN espn_s2 cookie value
+ESPN_LEAGUE_ID=123456                     # ESPN fantasy league ID
+ESPN_YEAR=2025                            # Active season year
+SOFFEE_SLACK_USER_TO_TEAM_MAP='{"U1234567890": 1, "U0987654321": 2}'
+SOFFEE_BROADCAST_CHANNEL=#nfl-updates
+SOFFEE_CRON_SUNDAY_10AM=0 15 * * 0
+SOFFEE_CRON_SUNDAY_12PM=0 17 * * 0
+SOFFEE_CRON_SUNDAY_430PM=30 21 * * 0
+SOFFEE_CRON_SUNDAY_8PM=0 1 * * 1
+SOFFEE_CRON_MONDAY_TUESDAY_7AM=0 12 * * 1,2
 ```
+
+`SOFFEE_SLACK_USER_TO_TEAM_MAP` must be a JSON object mapping each Slack user ID to the ESPN team ID that person is allowed to manage. Do not let users supply `slack_user_id` manually in chat; roster actions should use the real Slack actor ID from OpenClaw/Slack context.
 
 See `.env.example` for a template. For detailed setup instructions, refer to the [Configuration section in SKILL.md](./SKILL.md#configuration).
 

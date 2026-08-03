@@ -73,8 +73,8 @@ class TestScheduleConfigInitialization:
             assert sunday_12pm.cron_pattern == "0 8 * * 0"
             assert sunday_430pm.cron_pattern == "30 12 * * 0"
 
-    def test_schedule_config_has_four_schedules(self):
-        """Test that ScheduleConfig creates exactly four schedules."""
+    def test_schedule_config_has_five_schedules(self):
+        """Test that ScheduleConfig creates exactly five schedules."""
         with patch.dict(os.environ, {}, clear=True):
             config = ScheduleConfig()
             assert len(config.schedules) == 5
@@ -351,6 +351,7 @@ class TestDefaultConstants:
 
     def test_default_cron_values_are_strings(self):
         """Test that all default cron values are strings."""
+        assert isinstance(ScheduleConfig.DEFAULT_CRON_SUNDAY_10AM, str)
         assert isinstance(ScheduleConfig.DEFAULT_CRON_SUNDAY_12PM, str)
         assert isinstance(ScheduleConfig.DEFAULT_CRON_SUNDAY_430PM, str)
         assert isinstance(ScheduleConfig.DEFAULT_CRON_SUNDAY_8PM, str)
@@ -358,9 +359,14 @@ class TestDefaultConstants:
 
     def test_default_cron_values_are_valid(self):
         """Test that all default cron values are valid patterns."""
+        assert ScheduleConfig._is_valid_cron(ScheduleConfig.DEFAULT_CRON_SUNDAY_10AM)
         assert ScheduleConfig._is_valid_cron(ScheduleConfig.DEFAULT_CRON_SUNDAY_12PM)
         assert ScheduleConfig._is_valid_cron(ScheduleConfig.DEFAULT_CRON_SUNDAY_430PM)
         assert ScheduleConfig._is_valid_cron(ScheduleConfig.DEFAULT_CRON_SUNDAY_8PM)
         assert ScheduleConfig._is_valid_cron(
             ScheduleConfig.DEFAULT_CRON_MONDAY_TUESDAY_7AM
         )
+
+    def test_default_monday_tuesday_cron_targets_monday_and_tuesday(self):
+        """Test that the Monday/Tuesday schedule fires on the intended days."""
+        assert ScheduleConfig.DEFAULT_CRON_MONDAY_TUESDAY_7AM == "0 12 * * 1,2"

@@ -3130,4 +3130,3 @@ class TestGetHistoricalSeason:
 
             assert result["success"] is True
             assert result["standings"] == []
-

@@ -39,9 +39,11 @@ standard CLI framework for all Python command-line applications.
 ```python
 import click
 
+
 @click.group()
 def cli():
     """My application CLI."""
+
 
 @cli.command()
 @click.option("--name", required=True, help="Name to greet")
@@ -50,6 +52,7 @@ def greet(name: str, count: int):
     """Greet someone by name."""
     for _ in range(count):
         click.echo(f"Hello, {name}!")
+
 
 if __name__ == "__main__":
     cli()
@@ -60,6 +63,7 @@ if __name__ == "__main__":
 ```python
 from click.testing import CliRunner
 from myapp.cli import cli
+
 
 def test_greet():
     runner = CliRunner()

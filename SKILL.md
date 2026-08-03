@@ -24,7 +24,7 @@ metadata:
         cron: "0 1 * * 1"
       - name: monday_tuesday_7am_est
         description: Monday/Tuesday morning post-game briefing
-        cron: "0 12 * * 2,3"
+        cron: "0 12 * * 1,2"
 ---
 
 # SOFFEE - OpenClaw Fantasy Football Skill
@@ -67,6 +67,22 @@ To enable Slack integration, configure the following environment variables:
   - Authenticates API calls and message posting
   - Generated in Slack App settings under "OAuth & Permissions"
 
+- **`ESPN_SWID`**: ESPN SWID cookie value (format: `{UUID}`)
+  - Authenticates Sofie to ESPN as the league commissioner
+
+- **`ESPN_S2`**: ESPN `espn_s2` cookie value
+  - Required to access private league data and roster actions
+
+- **`ESPN_LEAGUE_ID`**: ESPN fantasy football league ID
+  - Found in the ESPN league URL
+
+- **`ESPN_YEAR`**: Active ESPN season year (for example `2025`)
+  - Update this every season so Sofie reads and writes against the correct league year
+
+- **`SOFFEE_SLACK_USER_TO_TEAM_MAP`**: JSON object mapping Slack user IDs to ESPN team IDs
+  - Example: `{"U1234567890": 1, "U0987654321": 2}`
+  - This mapping is the authorization boundary for roster actions
+
 #### Setup Instructions
 
 1. **Create or open a Slack App**
@@ -90,6 +106,11 @@ To enable Slack integration, configure the following environment variables:
    ```bash
    SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX
    SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX
+   ESPN_SWID={YOUR-ESPN-SWID}
+   ESPN_S2=YOUR_ESPN_S2_COOKIE
+   ESPN_LEAGUE_ID=123456
+   ESPN_YEAR=2025
+   SOFFEE_SLACK_USER_TO_TEAM_MAP='{"U1234567890": 1, "U0987654321": 2}'
    ```
 
 ### Required OAuth Scopes
@@ -120,8 +141,9 @@ Sofie can be configured to automatically broadcast NFL window summaries and post
 
 #### Broadcast Schedule
 
-Sofie is configured with four default broadcast times aligned with standard NFL windows:
+Sofie is configured with five default automated schedules aligned with standard NFL windows:
 
+- **Sunday 10 AM EST** — Automated roster violation sweep
 - **Sunday 12 PM EST** — Early Sunday games
 - **Sunday 4:30 PM EST** — Mid-afternoon slate
 - **Sunday 8 PM EST** — Sunday night football
@@ -134,6 +156,10 @@ Configure the broadcast channel and cron schedules using these environment varia
 - **`SOFFEE_BROADCAST_CHANNEL`** — Slack channel for automated broadcasts
   - Format: Channel name (e.g., `#nfl-updates`) or channel ID (e.g., `C1234567890`)
   - Default: `#nfl-updates`
+
+- **`SOFFEE_CRON_SUNDAY_10AM`** — Cron pattern for Sunday 10 AM EST roster sweep
+  - Default: `0 15 * * 0` (15:00 UTC)
+  - Example: `0 10 * * 0` for 10:00 UTC
 
 - **`SOFFEE_CRON_SUNDAY_12PM`** — Cron pattern for Sunday 12 PM EST
   - Default: `0 17 * * 0` (17:00 UTC)
@@ -148,7 +174,7 @@ Configure the broadcast channel and cron schedules using these environment varia
   - Example: `0 20 * * 0` for 20:00 UTC Sunday
 
 - **`SOFFEE_CRON_MONDAY_TUESDAY_7AM`** — Cron pattern for Monday/Tuesday 7 AM EST
-  - Default: `0 12 * * 2,3` (12:00 UTC Tue/Wed)
+  - Default: `0 12 * * 1,2` (12:00 UTC Mon/Tue)
   - Example: `0 7 * * 1,2` for 07:00 UTC Mon/Tue
 
 #### Cron Syntax
@@ -218,7 +244,7 @@ The following constraints are non-negotiable and must be strictly observed:
 
 6. **Engage, Don't Overwhelm**: While you should be witty and engaging, respect message length and readability. Use thread replies for detailed breakdowns and short, punchy messages for quick responses. Avoid wall-of-text responses.
 
-7. **Authorization for Roster Actions**: When using roster management tools (`set_lineup_status` and `process_waiver_transaction`), you MUST always pass the `slack_user_id` parameter. These tools require authorization validation to ensure the requesting user owns the team they're attempting to modify. The authorization system will validate the Slack user ID against the team ID and reject unauthorized requests. Never attempt to bypass this validation or pass an incorrect user ID.
+7. **Authorization for Roster Actions**: When using roster management tools (`set_lineup_status` and `process_waiver_transaction`), you MUST always pass the `slack_user_id` parameter from the real Slack/OpenClaw event context. Never ask the user to type their Slack user ID, and never trust a Slack user ID provided in plain text by the user. These tools require authorization validation to ensure the requesting user owns the team they're attempting to modify. The authorization system will validate the Slack user ID against the team ID and reject unauthorized requests.
 
 8. **Historical League Data**: When users ask about past seasons, championship records, or historical performance, use the `get_historical_season_summary` tool to retrieve accurate historical data. This tool requires a year parameter (e.g., 2024, 2025). If a user asks about a specific season without providing the year, ask them which year they're interested in. Always cite the historical data when providing season summaries or performance comparisons.
 
@@ -354,13 +380,13 @@ This tool is useful when users ask requests like:
 ```json
 {
   "name": "set_lineup_status",
-  "description": "Move a player to a specific lineup slot (start, bench, or IR) for the user's team with authorization validation",
+  "description": "Move a player to a specific lineup slot (start, bench, or IR) for the user's own team after sourcing slack_user_id from Slack context and verifying ownership",
   "parameters": {
     "type": "object",
     "properties": {
       "slack_user_id": {
         "type": "string",
-        "description": "The Slack User ID of the requesting user (format: UXXXXXXXX). Required for authorization validation to ensure the user owns the team being modified."
+        "description": "The Slack User ID of the requesting user (format: UXXXXXXXX). This must come from Slack/OpenClaw event context, never from user-supplied text."
       },
       "team_id": {
         "type": "integer",
@@ -418,13 +444,13 @@ This tool is useful when users request transactions like:
 ```json
 {
   "name": "process_waiver_transaction",
-  "description": "Process a waiver wire claim or free agent pickup for the user's team with authorization validation",
+  "description": "Process a waiver wire claim or free agent pickup for the user's own team after sourcing slack_user_id from Slack context and verifying ownership",
   "parameters": {
     "type": "object",
     "properties": {
       "slack_user_id": {
         "type": "string",
-        "description": "The Slack User ID of the requesting user (format: UXXXXXXXX). Required for authorization validation to ensure the user owns the team making the transaction."
+        "description": "The Slack User ID of the requesting user (format: UXXXXXXXX). This must come from Slack/OpenClaw event context, never from user-supplied text."
       },
       "team_id": {
         "type": "integer",

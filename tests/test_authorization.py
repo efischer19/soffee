@@ -1,5 +1,6 @@
 """Tests for the authorization module."""
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -177,3 +178,44 @@ class TestGetSlackUserForTeam:
             assert get_slack_user_for_team(2) == "U2222222222"
             assert get_slack_user_for_team(3) == "U3333333333"
             assert get_slack_user_for_team(4) is None
+
+
+class TestEnvironmentBackedAuthorization:
+    """Test suite for SOFFEE_SLACK_USER_TO_TEAM_MAP support."""
+
+    def test_verify_team_ownership_uses_environment_mapping(self):
+        """Verify that environment-provided JSON mappings are honored."""
+        with (
+            patch.dict("authorization.SLACK_USER_TO_TEAM_MAPPING", {}, clear=True),
+            patch.dict(
+                os.environ,
+                {
+                    "SOFFEE_SLACK_USER_TO_TEAM_MAP": (
+                        '{"U1234567890": 1, "U0987654321": 2}'
+                    )
+                },
+                clear=False,
+            ),
+        ):
+            assert verify_team_ownership("U1234567890", 1) is True
+            assert get_slack_user_for_team(2) == "U0987654321"
+
+    def test_invalid_environment_mapping_fails_closed(self):
+        """Verify that malformed JSON disables roster authorization."""
+        with patch.dict(
+            os.environ,
+            {"SOFFEE_SLACK_USER_TO_TEAM_MAP": "{not-json}"},
+            clear=False,
+        ):
+            assert verify_team_ownership("U1234567890", 1) is False
+            assert get_slack_user_for_team(1) is None
+
+    def test_duplicate_team_ids_fail_closed(self):
+        """Verify that ambiguous mappings are rejected."""
+        with patch.dict(
+            os.environ,
+            {"SOFFEE_SLACK_USER_TO_TEAM_MAP": ('{"U1234567890": 1, "U0987654321": 1}')},
+            clear=False,
+        ):
+            assert verify_team_ownership("U1234567890", 1) is False
+            assert get_slack_user_for_team(1) is None

@@ -9,6 +9,7 @@ For detailed information about the project, see: meta/SOFFEE.md
 """
 
 import os
+from dataclasses import dataclass
 from difflib import get_close_matches
 from typing import Any
 
@@ -19,7 +20,36 @@ from espn_api.football.constant import POSITION_MAP
 from authorization import verify_team_ownership
 
 
-def initialize_league() -> League | None:
+@dataclass(frozen=True)
+class LeagueInitializationError:
+    """Represents a league initialization failure that should be surfaced to the LLM."""
+
+    error: str
+
+
+type LeagueContext = League | LeagueInitializationError | None
+
+
+def _league_unavailable_response(
+    league: LeagueContext, default_message: str
+) -> dict[str, Any] | None:
+    """Convert a missing or failed league initialization into a tool response."""
+    if isinstance(league, LeagueInitializationError):
+        return {"success": False, "error": league.error}
+
+    if league is None:
+        return {"success": False, "error": default_message}
+
+    return None
+
+
+def _response_error_text(response: requests.Response, fallback: str) -> str:
+    """Return a compact human-readable error message from an ESPN API response."""
+    response_text = " ".join(response.text.split()) if response.text else ""
+    return response_text or fallback
+
+
+def initialize_league() -> League | LeagueInitializationError:
     """
     Initialize and return an ESPN Fantasy Football League object.
 
@@ -35,7 +65,8 @@ def initialize_league() -> League | None:
 
     Returns:
         League: An instantiated ESPN League object if all credentials are present.
-        None: If any required credentials are missing.
+        LeagueInitializationError: If initialization fails and the agent needs a
+            human-readable explanation.
 
     Example:
         >>> league = initialize_league()
@@ -61,21 +92,42 @@ def initialize_league() -> League | None:
             ]
             if not val
         ]
-        print(f"Missing ESPN credentials: {', '.join(missing)}")
-        return None
+        error = f"Missing ESPN credentials: {', '.join(missing)}"
+        print(error)
+        return LeagueInitializationError(error)
 
     try:
         league = League(league_id=int(league_id), year=int(year), espn_s2=s2, swid=swid)
         return league
     except ValueError as e:
-        print(f"Error: Invalid ESPN credentials format: {e}")
-        return None
+        error = f"Invalid ESPN credentials format: {e}"
+        print(f"Error: {error}")
+        return LeagueInitializationError(error)
+    except requests.exceptions.Timeout:
+        error = "Timed out while connecting to ESPN. Please try again."
+        print(f"Error: {error}")
+        return LeagueInitializationError(error)
+    except requests.exceptions.ConnectionError as e:
+        error = f"Unable to connect to ESPN: {e}"
+        print(f"Error: {error}")
+        return LeagueInitializationError(error)
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 404:
+            error = (
+                f"ESPN could not find league {league_id} for season {year}. "
+                "Verify ESPN_LEAGUE_ID and ESPN_YEAR."
+            )
+        else:
+            error = f"ESPN rejected the league request: {e}"
+        print(f"Error: {error}")
+        return LeagueInitializationError(error)
     except Exception as e:
-        print(f"Error: Failed to initialize ESPN League: {e}")
-        return None
+        error = f"Failed to initialize ESPN League: {e}"
+        print(f"Error: {error}")
+        return LeagueInitializationError(error)
 
 
-def get_current_matchups(league: League | None) -> dict[str, Any]:
+def get_current_matchups(league: LeagueContext) -> dict[str, Any]:
     """
     Retrieve the current week's matchups, live box scores, and projected points.
 
@@ -112,11 +164,11 @@ def get_current_matchups(league: League | None) -> dict[str, Any]:
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot fetch matchups.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot fetch matchups."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     try:
         # Get current week from league
@@ -161,10 +213,15 @@ def get_current_matchups(league: League | None) -> dict[str, Any]:
             "success": False,
             "error": f"Invalid league data structure: {e}",
         }
-    except (ConnectionError, TimeoutError) as e:
+    except (ConnectionError, TimeoutError, requests.exceptions.ConnectionError) as e:
         return {
             "success": False,
             "error": f"API connection error: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN timed out while fetching matchups.",
         }
     except Exception as e:
         return {
@@ -173,7 +230,7 @@ def get_current_matchups(league: League | None) -> dict[str, Any]:
         }
 
 
-def generate_batch_score_summary(league: League | None) -> dict[str, Any]:
+def generate_batch_score_summary(league: LeagueContext) -> dict[str, Any]:
     """
     Generate a structured, plain-text summary of the entire league's scoreboard.
 
@@ -255,7 +312,7 @@ def generate_batch_score_summary(league: League | None) -> dict[str, Any]:
     }
 
 
-def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
+def get_team_roster(league: LeagueContext, team_name: str) -> dict[str, Any]:
     """
     Retrieve a team's active roster with player positions and injury statuses.
 
@@ -291,11 +348,11 @@ def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot fetch team roster.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot fetch team roster."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     if not team_name or not isinstance(team_name, str):
         return {
@@ -357,10 +414,15 @@ def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
             "success": False,
             "error": f"Invalid league data structure: {e}",
         }
-    except (ConnectionError, TimeoutError) as e:
+    except (ConnectionError, TimeoutError, requests.exceptions.ConnectionError) as e:
         return {
             "success": False,
             "error": f"API connection error: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN timed out while fetching the team roster.",
         }
     except Exception as e:
         return {
@@ -370,7 +432,7 @@ def get_team_roster(league: League | None, team_name: str) -> dict[str, Any]:
 
 
 def set_lineup_status(
-    league: League | None,
+    league: LeagueContext,
     slack_user_id: str,
     team_id: int,
     player_name: str,
@@ -424,11 +486,11 @@ def set_lineup_status(
             ),
         }
 
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot update lineup.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot update lineup."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     if not player_name or not isinstance(player_name, str):
         return {
@@ -583,7 +645,7 @@ def set_lineup_status(
             }
         elif response.status_code == 403:
             # This might be a "player locked" error or permissions issue
-            error_msg = response.text if response.text else "Access denied"
+            error_msg = _response_error_text(response, "Access denied")
             return {
                 "success": False,
                 "error": (
@@ -591,11 +653,27 @@ def set_lineup_status(
                     "or your account may not have permission."
                 ),
             }
+        elif response.status_code == 404:
+            return {
+                "success": False,
+                "error": (
+                    "ESPN could not find the requested lineup resource. Verify "
+                    "the league, season, and team configuration."
+                ),
+            }
+        elif response.status_code == 400:
+            error_msg = _response_error_text(
+                response, "The lineup change was rejected by ESPN."
+            )
+            return {
+                "success": False,
+                "error": f"ESPN rejected the lineup update: {error_msg}",
+            }
         else:
             return {
                 "success": False,
                 "error": f"ESPN API returned status {response.status_code}: "
-                f"{response.text}",
+                f"{_response_error_text(response, 'No error details returned.')}",
             }
 
     except requests.exceptions.Timeout:
@@ -616,7 +694,7 @@ def set_lineup_status(
 
 
 def process_waiver_transaction(
-    league: League | None,
+    league: LeagueContext,
     slack_user_id: str,
     team_id: int,
     player_to_add: str,
@@ -673,11 +751,11 @@ def process_waiver_transaction(
             ),
         }
 
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot process transaction.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot process transaction."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     # Validate team_id
     if not isinstance(team_id, int) or team_id <= 0:
@@ -881,16 +959,36 @@ def process_waiver_transaction(
                 "error": "Authentication failed. Check your ESPN credentials.",
             }
         elif response.status_code == 403:
-            error_msg = response.text if response.text else "Access denied"
+            error_msg = _response_error_text(response, "Access denied")
             return {
                 "success": False,
                 "error": f"Permission denied: {error_msg}",
+            }
+        elif response.status_code == 404:
+            return {
+                "success": False,
+                "error": (
+                    "ESPN could not find the requested transaction resource. Verify "
+                    "the league, season, and team configuration."
+                ),
+            }
+        elif response.status_code == 400:
+            error_msg = _response_error_text(
+                response,
+                (
+                    "The transaction was rejected by ESPN. Waiver rules, roster "
+                    "limits, or player lock status may have blocked the move."
+                ),
+            )
+            return {
+                "success": False,
+                "error": f"ESPN rejected the transaction: {error_msg}",
             }
         else:
             return {
                 "success": False,
                 "error": f"ESPN API returned status {response.status_code}: "
-                f"{response.text}",
+                f"{_response_error_text(response, 'No error details returned.')}",
             }
 
     except requests.exceptions.Timeout:
@@ -910,7 +1008,7 @@ def process_waiver_transaction(
         }
 
 
-def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]:
+def detect_roster_violations(league: LeagueContext, week: int) -> dict[str, Any]:
     """
     Detect starting roster violations for a given week.
 
@@ -946,11 +1044,11 @@ def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot detect roster violations.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot detect roster violations."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     if not isinstance(week, int) or week < 1 or week > 17:
         return {
@@ -1013,10 +1111,15 @@ def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]
             "success": False,
             "error": f"Invalid league data structure: {e}",
         }
-    except (ConnectionError, TimeoutError) as e:
+    except (ConnectionError, TimeoutError, requests.exceptions.ConnectionError) as e:
         return {
             "success": False,
             "error": f"API connection error: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN timed out while detecting roster violations.",
         }
     except Exception as e:
         return {
@@ -1026,7 +1129,7 @@ def detect_roster_violations(league: League | None, week: int) -> dict[str, Any]
 
 
 def get_top_free_agent_replacements(
-    league: League | None, position: str, week: int, limit: int = 3
+    league: LeagueContext, position: str, week: int, limit: int = 3
 ) -> dict[str, Any]:
     """
     Retrieve the top available free agents for a position sorted by projection.
@@ -1069,11 +1172,11 @@ def get_top_free_agent_replacements(
         No exceptions are raised. All errors are caught and returned in the
         response dictionary with success=False and an error message.
     """
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot fetch free agents.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot fetch free agents."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     if not position or not isinstance(position, str):
         return {
@@ -1081,10 +1184,10 @@ def get_top_free_agent_replacements(
             "error": "Invalid position: must be a non-empty string.",
         }
 
-    if not isinstance(week, int) or week < 1:
+    if not isinstance(week, int) or week < 1 or week > 17:
         return {
             "success": False,
-            "error": "Invalid week: must be a positive integer.",
+            "error": "Invalid week: must be an integer between 1 and 17.",
         }
 
     if not isinstance(limit, int) or limit < 1:
@@ -1136,10 +1239,15 @@ def get_top_free_agent_replacements(
             "success": False,
             "error": f"Invalid league data structure: {e}",
         }
-    except (ConnectionError, TimeoutError) as e:
+    except (ConnectionError, TimeoutError, requests.exceptions.ConnectionError) as e:
         return {
             "success": False,
             "error": f"API connection error: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to ESPN timed out while fetching free agents.",
         }
     except Exception as e:
         return {
@@ -1148,7 +1256,7 @@ def get_top_free_agent_replacements(
         }
 
 
-def run_sunday_roster_sweep(league: League | None, week: int) -> dict[str, Any]:
+def run_sunday_roster_sweep(league: LeagueContext, week: int) -> dict[str, Any]:
     """
     Execute the Sunday morning automated roster violation sweep.
 
@@ -1180,11 +1288,11 @@ def run_sunday_roster_sweep(league: League | None, week: int) -> dict[str, Any]:
         >>> if result['success']:
         ...     print(f"Found violations for {result['violations_found']} teams")
     """
-    if league is None:
-        return {
-            "success": False,
-            "error": "League is None. Cannot run roster sweep.",
-        }
+    unavailable_response = _league_unavailable_response(
+        league, "League is None. Cannot run roster sweep."
+    )
+    if unavailable_response is not None:
+        return unavailable_response
 
     if not isinstance(week, int) or week < 1 or week > 17:
         return {
@@ -1267,13 +1375,14 @@ def run_sunday_roster_sweep(league: League | None, week: int) -> dict[str, Any]:
                     response = requests.post(
                         "https://slack.com/api/chat.postMessage",
                         headers={
-                            "Authorization": "******",
+                            "Authorization": "Bearer " + slack_bot_token,
                             "Content-Type": "application/json",
                         },
                         json={
                             "channel": slack_user_id,  # Direct message to the user
                             "text": message,
                         },
+                        timeout=10,
                     )
 
                     if response.status_code == 200:
@@ -1289,10 +1398,20 @@ def run_sunday_roster_sweep(league: League | None, week: int) -> dict[str, Any]:
             "messages_posted": messages_posted,
         }
 
-    except (AttributeError, ConnectionError, TimeoutError) as e:
+    except (
+        AttributeError,
+        ConnectionError,
+        TimeoutError,
+        requests.exceptions.ConnectionError,
+    ) as e:
         return {
             "success": False,
             "error": f"Error during roster sweep: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "error": "Request to Slack or ESPN timed out during the roster sweep.",
         }
     except Exception as e:
         return {
@@ -1339,7 +1458,7 @@ def _format_roster_sweep_message(
         reason_text = (
             "bye week" if reason.lower() == "bye" else f"{reason.lower()} status"
         )
-        lines.append(f"❌ **{name}** ({position}) — {reason_text}")
+        lines.append(f"❌ *{name}* ({position}) — {reason_text}")
 
     lines.append("")
 
@@ -1349,7 +1468,7 @@ def _format_roster_sweep_message(
     if suggestions:
         for position, players in suggestions.items():
             if players:
-                lines.append(f"\n**{position} Options:**")
+                lines.append(f"\n*{position} Options:*")
                 for i, player in enumerate(players[:3], 1):
                     name = player.get("name", "Unknown")
                     proj_pts = player.get("projected_points", 0)
@@ -1366,7 +1485,7 @@ def _format_roster_sweep_message(
     return "\n".join(lines)
 
 
-def get_historical_season(year: int) -> dict[str, Any]:
+def get_historical_season_summary(year: int) -> dict[str, Any]:
     """
     Retrieve historical season data for a given year.
 
@@ -1470,11 +1589,17 @@ def get_historical_season(year: int) -> dict[str, Any]:
             "year": year,
             "error": error_msg,
         }
-    except (ConnectionError, TimeoutError) as e:
+    except (ConnectionError, TimeoutError, requests.exceptions.ConnectionError) as e:
         return {
             "success": False,
             "year": year,
             "error": f"Failed to connect to ESPN API: {e}",
+        }
+    except requests.exceptions.Timeout:
+        return {
+            "success": False,
+            "year": year,
+            "error": "Timed out while retrieving historical season data from ESPN.",
         }
     except Exception as e:
         error_msg = (
@@ -1485,6 +1610,9 @@ def get_historical_season(year: int) -> dict[str, Any]:
             "year": year,
             "error": error_msg,
         }
+
+
+get_historical_season = get_historical_season_summary
 
 
 def main():

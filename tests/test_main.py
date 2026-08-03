@@ -11,6 +11,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from main import (
+    LeagueInitializationError,
     _format_roster_sweep_message,
     detect_roster_violations,
     generate_batch_score_summary,
@@ -68,7 +69,8 @@ def test_initialize_league_missing_swid(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Missing ESPN credentials: ESPN_SWID"
         assert "ESPN_SWID" in captured.out
         assert "Missing ESPN credentials" in captured.out
 
@@ -85,7 +87,8 @@ def test_initialize_league_missing_s2(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Missing ESPN credentials: ESPN_S2"
         assert "ESPN_S2" in captured.out
         assert "Missing ESPN credentials" in captured.out
 
@@ -102,7 +105,8 @@ def test_initialize_league_missing_league_id(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Missing ESPN credentials: ESPN_LEAGUE_ID"
         assert "ESPN_LEAGUE_ID" in captured.out
         assert "Missing ESPN credentials" in captured.out
 
@@ -119,7 +123,8 @@ def test_initialize_league_missing_year(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Missing ESPN credentials: ESPN_YEAR"
         assert "ESPN_YEAR" in captured.out
         assert "Missing ESPN credentials" in captured.out
 
@@ -137,7 +142,8 @@ def test_initialize_league_invalid_league_id(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert "Invalid ESPN credentials format" in result.error
         assert "Invalid ESPN credentials format" in captured.out
 
 
@@ -154,7 +160,8 @@ def test_initialize_league_invalid_year(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert "Invalid ESPN credentials format" in result.error
         assert "Invalid ESPN credentials format" in captured.out
 
 
@@ -176,7 +183,8 @@ def test_initialize_league_api_error(capsys):
         result = initialize_league()
         captured = capsys.readouterr()
 
-        assert result is None
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Failed to initialize ESPN League: API error"
         assert "Failed to initialize ESPN League" in captured.out
 
 
@@ -3130,3 +3138,103 @@ class TestGetHistoricalSeason:
 
             assert result["success"] is True
             assert result["standings"] == []
+
+
+def test_initialize_league_timeout_returns_human_readable_error(capsys):
+    """Verify that ESPN timeouts surface a readable initialization error."""
+    env_vars = {
+        "ESPN_SWID": "test_swid",
+        "ESPN_S2": "test_s2",
+        "ESPN_LEAGUE_ID": "12345",
+        "ESPN_YEAR": "2024",
+    }
+
+    with (
+        patch.dict(os.environ, env_vars, clear=False),
+        patch("main.League") as mock_league,
+    ):
+        import requests
+
+        mock_league.side_effect = requests.exceptions.Timeout()
+
+        result = initialize_league()
+        captured = capsys.readouterr()
+
+        assert isinstance(result, LeagueInitializationError)
+        assert result.error == "Timed out while connecting to ESPN. Please try again."
+        assert "Timed out while connecting to ESPN" in captured.out
+
+
+def test_get_current_matchups_returns_initialization_error_message():
+    """Verify that downstream tools surface initialization failures to the LLM."""
+    result = get_current_matchups(
+        LeagueInitializationError("Missing ESPN credentials: ESPN_SWID")
+    )
+
+    assert result["success"] is False
+    assert result["error"] == "Missing ESPN credentials: ESPN_SWID"
+
+
+def test_set_lineup_status_not_found_error(mock_verify_team_ownership):
+    """Verify that set_lineup_status returns a friendly 404 error."""
+    mock_player = MagicMock()
+    mock_player.name = "John Doe"
+    mock_player.player_id = 123
+    mock_player.slot_position = 0
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.roster = [mock_player]
+
+    mock_league = MagicMock()
+    mock_league.teams = [mock_team]
+    mock_league.league_id = 12345
+    mock_league.year = 2024
+    mock_league.current_week = 5
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {}
+
+    with patch("main.requests.put") as mock_put:
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_put.return_value = mock_response
+
+        result = set_lineup_status(mock_league, "U1234567890", 1, "John Doe", "BENCH")
+
+        assert result["success"] is False
+        assert "could not find the requested lineup resource" in result["error"]
+
+
+def test_process_waiver_transaction_rejected_claim_error(mock_verify_team_ownership):
+    """Verify that rejected waiver claims return ESPN's reason."""
+    mock_league = MagicMock()
+    mock_league.year = 2024
+    mock_league.league_id = 12345
+    mock_league.espn_request = MagicMock()
+    mock_league.espn_request.cookies = {"espn_s2": "test"}
+
+    mock_add_player = MagicMock()
+    mock_add_player.player_id = 1
+    mock_add_player.name = "Patrick Mahomes"
+
+    mock_team = MagicMock()
+    mock_team.team_id = 1
+    mock_team.team_name = "Test Team"
+    mock_team.roster = []
+
+    mock_league.teams = [mock_team]
+    mock_league.players = [mock_add_player]
+
+    with patch("main.requests.post") as mock_post:
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = "Waiver period is closed for this player"
+        mock_post.return_value = mock_response
+
+        result = process_waiver_transaction(
+            mock_league, "U1234567890", 1, "Patrick Mahomes", None, 5
+        )
+
+        assert result["success"] is False
+        assert "ESPN rejected the transaction" in result["error"]
+        assert "Waiver period is closed for this player" in result["error"]

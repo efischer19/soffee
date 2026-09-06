@@ -4,7 +4,7 @@
   "type": "module",
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./index.js"
     ]
   },
   "description": "> **E**ric's **E**SPN **F**antasy **F**ootball **O**penclaw **S**kill, acronymed > backwards for a better name.",
@@ -34,5 +34,14 @@
     "openclaw": "^2026.9.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "@google/genai@2.18.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "koffi@3.1.6": true,
+    "openclaw@2026.9.2": true,
+    "protobufjs@7.6.6": true,
+    "tree-sitter-bash@0.25.1": true
   }
 }

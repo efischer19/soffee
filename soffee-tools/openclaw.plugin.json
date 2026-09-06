@@ -1,0 +1,24 @@
+{
+  "id": "soffee",
+  "name": "SOFFEE",
+  "description": "An autonomous, Slack-native commissioner's assistant for fantasy football leagues.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "get_current_matchups",
+      "get_team_roster",
+      "set_lineup_status",
+      "process_waiver_transaction",
+      "generate_batch_score_summary",
+      "get_historical_season_summary"
+    ]
+  }
+}

@@ -8,6 +8,9 @@ and automated content generation via conversational AI in Slack.
 For detailed information about the project, see: meta/SOFFEE.md
 """
 
+import argparse
+import json
+import sys
 import os
 from dataclasses import dataclass
 from difflib import get_close_matches
@@ -1614,20 +1617,83 @@ def get_historical_season_summary(year: int) -> dict[str, Any]:
 
 get_historical_season = get_historical_season_summary
 
-
 def main():
     """
-    Main entry point for the SOFFEE OpenClaw skill.
-
-    This function is called by the OpenClaw framework when the skill is invoked.
-    The actual implementation will evolve through the phased roadmap:
-
-    - Phase v0: Monolithic skill with ESPN API integration
-    - Phase v1: Refactored into soffee-core and soffee-skill packages
-    - Phase v2+: Multi-platform support with provider adapters
+    Main entry point for the SOFFEE OpenClaw plugin.
+    Parses CLI arguments sent from the TypeScript wrapper and outputs JSON.
     """
-    # TODO: Implement skill logic
-    pass
+    parser = argparse.ArgumentParser(description="SOFFEE OpenClaw CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # 1. get-current-matchups
+    subparsers.add_parser("get-current-matchups")
+
+    # 2. get-team-roster
+    p_roster = subparsers.add_parser("get-team-roster")
+    p_roster.add_argument("team_name")
+
+    # 3. set-lineup-status
+    p_lineup = subparsers.add_parser("set-lineup-status")
+    p_lineup.add_argument("slack_user_id")
+    p_lineup.add_argument("team_id", type=int)
+    p_lineup.add_argument("player_name")
+    p_lineup.add_argument("target_slot")
+
+    # 4. process-waiver-transaction
+    p_waiver = subparsers.add_parser("process-waiver-transaction")
+    p_waiver.add_argument("slack_user_id")
+    p_waiver.add_argument("team_id", type=int)
+    p_waiver.add_argument("player_to_add")
+    p_waiver.add_argument("player_to_drop")
+    p_waiver.add_argument("bid_amount", type=int)
+
+    # 5. generate-batch-score-summary
+    subparsers.add_parser("generate-batch-score-summary")
+
+    # 6. get-historical-season-summary
+    p_history = subparsers.add_parser("get-historical-season-summary")
+    p_history.add_argument("year", type=int)
+
+    args = parser.parse_args()
+
+    # Handle commands that do not require the active league to be initialized
+    if args.command == "get-historical-season-summary":
+        result = get_historical_season_summary(args.year)
+        print(json.dumps(result))
+        sys.exit(0 if result.get("success") else 1)
+
+    # Initialize the current league for all other commands
+    league = initialize_league()
+    if isinstance(league, LeagueInitializationError):
+        print(json.dumps({"success": False, "error": league.error}))
+        sys.exit(1)
+
+    # Route to the appropriate function
+    if args.command == "get-current-matchups":
+        result = get_current_matchups(league)
+    elif args.command == "get-team-roster":
+        result = get_team_roster(league, args.team_name)
+    elif args.command == "set-lineup-status":
+        result = set_lineup_status(league, args.slack_user_id, args.team_id, args.player_name, args.target_slot)
+    elif args.command == "process-waiver-transaction":
+        # The TypeScript wrapper sends "null" as a string if no drop player is specified
+        drop_player = None if args.player_to_drop == "null" else args.player_to_drop
+        result = process_waiver_transaction(
+            league, 
+            args.slack_user_id, 
+            args.team_id, 
+            args.player_to_add, 
+            drop_player, 
+            args.bid_amount
+        )
+    elif args.command == "generate-batch-score-summary":
+        result = generate_batch_score_summary(league)
+    else:
+        result = {"success": False, "error": f"Unknown command: {args.command}"}
+
+    # Print the result to stdout so the Node plugin can read it
+    print(json.dumps(result))
+    sys.exit(0 if result.get("success") else 1)
 
 
 if __name__ == "__main__":

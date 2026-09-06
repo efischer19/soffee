@@ -1,0 +1,38 @@
+{
+  "name": "@openclaw/soffee",
+  "version": "0.1.0",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "description": "> **E**ric's **E**SPN **F**antasy **F**ootball **O**penclaw **S**kill, acronymed > backwards for a better name.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/efischer19/soffee.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/efischer19/soffee/issues"
+  },
+  "homepage": "https://github.com/efischer19/soffee#readme",
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "openclaw": "^2026.9.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

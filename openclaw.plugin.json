@@ -1,0 +1,10 @@
+{
+  "id": "soffee",
+  "name": "SOFFEE",
+  "description": "An autonomous, Slack-native commissioner's assistant for fantasy football leagues.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

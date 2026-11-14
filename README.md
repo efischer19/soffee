@@ -59,6 +59,7 @@ Because there is no official, public ESPN Fantasy API, Sofie authenticates by pi
 **v0 runs as an MCP server, read-only.** `main.py` is a [Model Context Protocol](https://modelcontextprotocol.io) server (FastMCP, stdio) with 13 read-only tools: scoreboard, box scores, NFL schedule, standings, power rankings, recent activity, player info, rosters, roster violations, free-agent replacements, a recap summary, season history and team owners. OpenClaw starts it as an MCP server, and Sofie's persona and rules live alongside it (below).
 
 What changed from the original v0 plan, and why:
+
 - **MCP instead of a ClawHub skill.** Any MCP client can use the tools (OpenClaw, Claude, other agent harnesses), which is most of what v1's "thin wrapper" was for.
 - **No roster actions yet** (start/sit, add/drop, the Sunday roster sweep). They need the Slack-actor authorization above done properly; they'll return as separate tools.
 - **Scheduled recaps are OpenClaw cron jobs** that wake Sofie with the instructions in `AGENTS.md`, not code here.

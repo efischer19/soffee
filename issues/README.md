@@ -2,7 +2,7 @@
 
 A to-do list in plain markdown, kept next to the code it's about. It's the same pattern in every repo:
 
-```
+```text
 issues/
   todo/<slug>.md    open
   done/<slug>.md    finished (moved here with `git mv`, in the same commit as the work)
@@ -17,7 +17,7 @@ issues/
 Each issue has a `Priority:` line with one of three values:
 
 | Priority | Means | Limit |
-|---|---|---|
+| --- | --- | --- |
 | `now` | Being worked on, or next up. If an agent asks "what should I do?", it's one of these. | **At most 3 per repo.** To add one, demote one. |
 | `next` | Wanted soon; the pool `now` is refilled from. | none |
 | `later` | Real but not soon. Also where new, untriaged issues land. | none |

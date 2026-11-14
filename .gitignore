@@ -108,3 +108,15 @@ site/
 # Repomix
 # =============================================================================
 repomix-output.xml
+
+# OpenClaw workspace: this repo's root is Sofie's workspace when deployed.
+# Your league's specifics (copy from the *.example.md files):
+/USER.md
+/TOOLS.md
+# What Sofie writes herself, and OpenClaw's runtime state:
+/MEMORY.md
+/memory/
+/openclaw-workspace-state.json
+/.openclaw/
+# Hand-made backups
+*.bak-*

@@ -95,6 +95,9 @@ htmlcov/
 # Environment and secrets
 # =============================================================================
 .env
+# Any local credentials file (e.g. the ESPN/Slack values a host keeps next to .env)
+.creds
+*.creds
 .envrc
 .env.local
 .env.*.local

@@ -39,12 +39,14 @@ To balance the immediate need for a functional MVP with the long-term goal of bu
   * Public channel roster actions (Start, Sit, Add, Drop).
   * Automated cron job broadcasts (NFL window summaries).
 
+**Status, November 2026:** v0 shipped as a read-only **MCP server** rather than a ClawHub skill (see the README's Status section). Roster actions are deferred until Slack-actor authorization is done properly; automated broadcasts run as OpenClaw cron jobs.
+
 ### **Phase v1: The Architecture Refactor (Split Distribution)**
 
 * **Focus:** Decoupling logic for broader open-source adoption.
 * **Architecture:** Split the monolith into two distinct packages.
   1. **soffee-core (PyPI):** A pure Python package containing all API fetching, data modeling, and business logic.
-  2. **soffee-skill (ClawHub):** A lightweight OpenClaw wrapper that imports soffee-core to handle LLM routing and Slack I/O.
+  2. **soffee-skill (ClawHub):** A lightweight OpenClaw wrapper that imports soffee-core to handle LLM routing and Slack I/O. *(Now: the MCP server in `main.py` plays this role. It becomes the thin layer over soffee-core, and Slack I/O stays with OpenClaw.)*
 * **Engineering Pattern:** Implement the **Adapter Design Pattern**. Establish a "Universal Interface" (UniversalTeam, UniversalMatchup) so the agent logic remains isolated from the specific fantasy platform's data shape. Create the ESPNProvider to map espn-api data to this universal format.
 
 ### **Phase v2+: Multi-Platform Generalization ("The One Ring")**

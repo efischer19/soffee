@@ -35,7 +35,7 @@ Because there is no official, public ESPN Fantasy API, Sofie authenticates by pi
 
 1. **You must provide your cookies:** To run Sofie, the Commissioner must extract their `SWID` and `espn_s2` cookies from their browser and place them in the `.env` file.
 2. **Never share your `.env`:** These cookies provide access to your *entire* ESPN account. **DO NOT commit them to GitHub.** If you are not the one hosting the OpenClaw server, you must implicitly trust the person who is.
-3. **The Slack ID Mapping is your firewall:** Because Sofie has the power to drop *any* player in the league, `SOFFEE_SLACK_USER_TO_TEAM_MAP` is your only line of defense. Sofie cross-references the Slack User ID of the person issuing a command against this mapping before executing a move. You must configure this mapping accurately to prevent managers from modifying other people's rosters.
+3. **The Slack ID mapping says who owns which team.** Today Sofie is read-only (see Status below): `SOFFEE_SLACK_USER_TO_TEAM_MAP` is how she answers "who owns what" without guessing. If roster actions come back, this mapping becomes the firewall again: commissioner cookies can change *any* team, so every move must be checked against the real Slack user who asked.
 
 ### Finding your ESPN Cookies
 
@@ -54,19 +54,31 @@ Because there is no official, public ESPN Fantasy API, Sofie authenticates by pi
 | **v1** | Architecture Refactor | `soffee-core` (PyPI) + `soffee-skill` (ClawHub) |
 | **v2+** | Multi-Platform | Universal Interface + provider adapters |
 
+### Status (November 2026)
+
+**v0 runs as an MCP server, read-only.** `main.py` is a [Model Context Protocol](https://modelcontextprotocol.io) server (FastMCP, stdio) with 13 read-only tools: scoreboard, box scores, NFL schedule, standings, power rankings, recent activity, player info, rosters, roster violations, free-agent replacements, a recap summary, season history and team owners. OpenClaw starts it as an MCP server, and Sofie's persona and rules live alongside it (below).
+
+What changed from the original v0 plan, and why:
+- **MCP instead of a ClawHub skill.** Any MCP client can use the tools (OpenClaw, Claude, other agent harnesses), which is most of what v1's "thin wrapper" was for.
+- **No roster actions yet** (start/sit, add/drop, the Sunday roster sweep). They need the Slack-actor authorization above done properly; they'll return as separate tools.
+- **Scheduled recaps are OpenClaw cron jobs** that wake Sofie with the instructions in `AGENTS.md`, not code here.
+
+v1 (the `soffee-core` split and the provider interface) still applies: the ESPN logic moves out of `main.py` into a library, and the MCP server becomes the thin layer that depends on it.
+
 ## Repository Structure
+
+The repo root doubles as Sofie's OpenClaw workspace.
 
 | Path | Purpose |
 | :--- | :--- |
-| `apps/` | Standalone Python applications, each with its own `pyproject.toml` |
-| `libs/` | Shared Python libraries used across applications |
-| `testing/` | Shared test utilities, fixtures, and helpers |
-| `scripts/` | Utility and automation scripts |
-| `templates/` | Template files for scaffolding new apps and libs |
-| `meta/adr/` | Architecture Decision Records — the logbook of *why* decisions were made |
-| `meta/plans/` | Project plans and roadmaps |
-| `docs-src/` | Source files for generated documentation (MkDocs) |
-| `.github/` | GitHub-specific configuration (issue templates, PR templates, CI workflows) |
+| `main.py` | The MCP server (`uv run main.py`; `uv run main.py --check` tests the ESPN connection) |
+| `tests/` | pytest suite (ESPN is mocked) |
+| `SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `HEARTBEAT.md` | Sofie's persona, identity, rules and heartbeat, loaded by OpenClaw |
+| `USER.example.md`, `TOOLS.example.md` | Templates for your league's specifics. Copy to `USER.md` / `TOOLS.md` (git-ignored) |
+| `.env.example` | ESPN credentials and the Slack-to-team map. Copy to `.env` (git-ignored) |
+| `meta/` | The executive summary (`SOFFEE.md`), ADRs and plans |
+| `issues/` | A plain-markdown to-do list (GitHub issues hold the v1 roadmap) |
+| `scripts/` | Local CI and docs helpers |
 
 ## Key Tooling Decisions (ADRs)
 
@@ -105,46 +117,30 @@ Enable Event Subscriptions in your Slack App and subscribe to:
 - `message.channels` — Listen to channel messages
 - `message.im` — Listen to direct messages
 
-### Environment Configuration
+### Running it with OpenClaw
 
-Once your Slack App is configured, set the following environment variables:
+1. Clone this repo where OpenClaw can reach it; that folder is Sofie's workspace.
+2. `cp .env.example .env`, `cp USER.example.md USER.md`, `cp TOOLS.example.md TOOLS.md`, and fill them in.
+3. `uv run main.py --check` should print your league's name and team count.
+4. In `openclaw.json`, point Sofie's agent at the folder and register the server:
 
-```bash
-SLACK_APP_TOKEN=xapp-1-XXXXXXXXXXXXXXX    # Socket Mode App Token
-SLACK_BOT_TOKEN=xoxb-XXXXXXXXXXXXXXX      # Bot User OAuth Token
-ESPN_SWID={YOUR-ESPN-SWID}                # ESPN SWID cookie value
-ESPN_S2=YOUR_ESPN_S2_COOKIE               # ESPN espn_s2 cookie value
-ESPN_LEAGUE_ID=123456                     # ESPN fantasy league ID
-ESPN_YEAR=2025                            # Active season year
-SOFFEE_SLACK_USER_TO_TEAM_MAP='{"U1234567890": 1, "U0987654321": 2}'
-SOFFEE_BROADCAST_CHANNEL=#nfl-updates
-SOFFEE_CRON_SUNDAY_10AM=0 15 * * 0
-SOFFEE_CRON_SUNDAY_12PM=0 17 * * 0
-SOFFEE_CRON_SUNDAY_430PM=30 21 * * 0
-SOFFEE_CRON_SUNDAY_8PM=0 1 * * 1
-SOFFEE_CRON_MONDAY_TUESDAY_7AM=0 12 * * 1,2
+```json5
+agents: { list: [ { id: "sofie", workspace: "/path/to/soffee", /* ... */ } ] },
+mcp: { servers: { soffee: { command: "uv", args: ["run", "main.py"], cwd: "/path/to/soffee" } } },
 ```
 
-`SOFFEE_SLACK_USER_TO_TEAM_MAP` must be a JSON object mapping each Slack user ID to the ESPN team ID that person is allowed to manage. Do not let users supply `slack_user_id` manually in chat; roster actions should use the real Slack actor ID from OpenClaw/Slack context.
-
-See `.env.example` for a template. For detailed setup instructions, refer to the [Configuration section in SKILL.md](./SKILL.md#configuration).
+Slack itself (the tokens and Socket Mode above) is configured in OpenClaw's Slack channel, not here.
 
 ## Getting Started
 
 ```bash
-# Install Python 3.12+
-pyenv install 3.12
-pyenv local 3.12
+# Python 3.12+ and uv (https://docs.astral.sh/uv/)
+uv sync
+uv run pytest
 
-# Install uv
-pip install uv
-
-# Install pre-commit hooks
-pip install pre-commit
+# Quality checks (ruff, markdownlint and friends), the same as CI
 pre-commit install
-
-# Run local quality checks
-./scripts/local-ci-check.sh
+pre-commit run --all-files
 ```
 
 ## License

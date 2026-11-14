@@ -1,19 +1,21 @@
 [project]
 name = "soffee"
 version = "0.1.0"
-description = "SOFFEE - An OpenClaw skill for fantasy football league management"
+description = "SOFFEE - an MCP server for ESPN fantasy football leagues, run as Sofie's tools in OpenClaw"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     {name = "efischer19"}
 ]
 dependencies = [
-    "espn-api>=0.31.0",
+    "mcp>=1.27,<2",
+    "espn-api",
+    "requests",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=9.1.1",
+    "pytest>=8",
     "ruff>=0.16",
 ]
 
@@ -24,11 +26,13 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# main.py's docstrings are the MCP tool descriptions the model reads; keep each instruction on one line.
+"main.py" = ["E501"]
+"tests/*" = ["E501"]
+
 [tool.ruff.format]
 quote-style = "double"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.uv.workspace]
-members = ["apps/*", "libs/*"]
